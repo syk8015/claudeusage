@@ -31,6 +31,8 @@ import json, os, sys, subprocess, urllib.request, urllib.error
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
+sys.path.insert(0, HERE)
+from i18n import t, is_ko                       # noqa: E402  (경로를 넣은 뒤라야 한다)
 LOG = os.path.join(ROOT, "data", "usage-log.jsonl")
 
 USAGE_URL = "https://api.anthropic.com/api/oauth/usage"
@@ -52,17 +54,21 @@ def token():
             ["security", "find-generic-password", "-s", KEYCHAIN_SERVICE, "-w"],
             capture_output=True, text=True, timeout=20)
     except (OSError, subprocess.TimeoutExpired) as e:
-        raise SystemExit("%s키체인을 못 읽었다: %s%s" % (R, e, X))
+        raise SystemExit("%s%s%s" % (R, t("Could not read the keychain: %s",
+                                          "키체인을 못 읽었다: %s") % e, X))
     if raw.returncode != 0:
-        raise SystemExit("%s키체인에 \"%s\" 항목이 없다.%s" % (R, KEYCHAIN_SERVICE, X))
+        raise SystemExit("%s%s%s" % (R, t('No "%s" entry in the keychain.',
+                                          '키체인에 "%s" 항목이 없다.') % KEYCHAIN_SERVICE, X))
     try:
         d = json.loads(raw.stdout)
     except ValueError:
-        raise SystemExit("%s키체인 값이 JSON 이 아니다.%s" % (R, X))
+        raise SystemExit("%s%s%s" % (R, t("The keychain value is not JSON.",
+                                          "키체인 값이 JSON 이 아니다."), X))
     o = d.get("claudeAiOauth") or d
     tok = o.get("accessToken")
     if not tok:
-        raise SystemExit("%saccessToken 이 없다. 클로드코드에 다시 로그인해야 할 수 있다.%s" % (R, X))
+        raise SystemExit("%s%s%s" % (R, t("No accessToken. You may need to sign in to Claude Code again.",
+                                          "accessToken 이 없다. 클로드코드에 다시 로그인해야 할 수 있다."), X))
     return tok
 
 
@@ -78,10 +84,13 @@ def fetch():
     except urllib.error.HTTPError as e:
         body = e.read().decode("utf-8", "replace")[:300]
         if e.code == 401:
-            raise SystemExit("%s토큰이 만료됐다(401). 클로드코드를 한 번 쓰면 갱신된다.%s" % (R, X))
-        raise SystemExit("%s요청 실패 %s: %s%s" % (R, e.code, body, X))
+            raise SystemExit("%s%s%s" % (R, t("The token has expired (401). Using Claude Code once refreshes it.",
+                                              "토큰이 만료됐다(401). 클로드코드를 한 번 쓰면 갱신된다."), X))
+        raise SystemExit("%s%s%s" % (R, t("Request failed %s: %s",
+                                          "요청 실패 %s: %s") % (e.code, body), X))
     except urllib.error.URLError as e:
-        raise SystemExit("%s연결 실패: %s%s" % (R, e.reason, X))
+        raise SystemExit("%s%s%s" % (R, t("Connection failed: %s",
+                                          "연결 실패: %s") % e.reason, X))
 
 
 # ────────────────────────────────────────────── 응답 정규화
@@ -216,11 +225,14 @@ def precision_note(limits):
     """
     nums = [l["percent"] for l in limits if l["percent"] is not None]
     if not nums:
-        return "소진율을 못 읽었다"
+        return t("Could not read any percentage", "소진율을 못 읽었다")
     if [n for n in nums if abs(n - round(n)) > 1e-9]:
-        return "소수점이 왔다. 상태바(정수 %)보다 정밀하다 — 기록해 둘 것"
-    return ("전부 정수다. 상태바와 같은 해상도이고, 첫 실행 때도 그랬다. "
-            "정밀도로는 얻을 게 없다. 쓸모는 모델별 한도와 낡은 값 안 섞인 읽기.")
+        return t("Fractional values arrived — finer than the status line (integers). Worth recording.",
+                 "소수점이 왔다. 상태바(정수 %)보다 정밀하다 — 기록해 둘 것")
+    return t("All integers — same resolution as the status line, as on the first run. No precision "
+             "to gain here. The value is the per-model limit and one clean, unmixed reading.",
+             "전부 정수다. 상태바와 같은 해상도이고, 첫 실행 때도 그랬다. "
+             "정밀도로는 얻을 게 없다. 쓸모는 모델별 한도와 낡은 값 안 섞인 읽기.")
 
 
 # ────────────────────────────────────────────── 출력
@@ -228,22 +240,25 @@ def precision_note(limits):
 def show(data):
     lims = limits_of(data)
     if not lims:
-        print("%s한도 항목을 못 찾았다. --shape 로 응답 구조를 보라.%s" % (Y, X))
+        print("%s%s%s" % (Y, t("No limit entries found. Try --shape to see the response structure.",
+                               "한도 항목을 못 찾았다. --shape 로 응답 구조를 보라."), X))
         return
-    print("\n%s지금 한도%s" % (B, X))
-    print("%s종류                 묶음     대상      소진율  거친값  살아있나  리셋까지%s" % (D, X))
+    print("\n%s%s%s" % (B, t("Limits right now", "지금 한도"), X))
+    print("%s%s%s" % (D, t("kind                 group    scope       used   coarse  active    resets in",
+                           "종류                 묶음     대상      소진율  거친값  살아있나  리셋까지"), X))
     import time
     now = time.time()
     for l in sorted(lims, key=lambda x: (x["kind"] or "", x["model"] or "")):
         left = "-"
         if isinstance(l["resets_at"], (int, float)):
             s = l["resets_at"] - now
-            left = "%d시간 %d분" % (s // 3600, (s % 3600) // 60) if s > 0 else "지남"
+            left = (t("%dh %dm", "%d시간 %d분") % (s // 3600, (s % 3600) // 60)
+                    if s > 0 else t("passed", "지남"))
         pct = "%9.4f%%" % l["percent"] if l["percent"] is not None else "        -"
         coarse = "%5.0f%%" % l["coarse_percent"] if l["coarse_percent"] is not None else "    -"
-        act = {True: "예", False: "아니오", None: "-"}.get(l.get("is_active"), "-")
+        act = {True: t("yes", "예"), False: t("no", "아니오"), None: "-"}.get(l.get("is_active"), "-")
         print("%-20s %-8s %-9s %s %s  %-8s %s"
-              % (l["kind"] or "?", l.get("group") or "-", l["model"] or "전체",
+              % (l["kind"] or "?", l.get("group") or "-", l["model"] or t("all", "전체"),
                  pct, coarse, act, left))
     print("\n%s%s%s" % (D, precision_note(lims), X))
     show_breakdown(data, lims)
@@ -253,22 +268,26 @@ def show_breakdown(data, lims):
     """제품별 분해. 비중(%)과, 주간 한도로 환산한 %p 를 같이 보여준다."""
     bd = breakdown_of(data)
     if not bd:
-        print("%s제품별 분해(seven_day_breakdown)가 응답에 없다.%s" % (Y, X))
+        print("%s%s%s" % (Y, t("No per-product breakdown (seven_day_breakdown) in the response.",
+                               "제품별 분해(seven_day_breakdown)가 응답에 없다."), X))
         return
     weekly = next((l["percent"] for l in lims
                    if l["kind"] == "weekly_all" and l["percent"] is not None), None)
     tot = sum(r["percent"] for r in bd["rows"])
-    print("\n%s주간 한도를 제품별로%s   창 시작 %s"
-          % (B, X, _utc(bd["window_started_at"])))
+    print("\n%s%s%s   %s %s"
+          % (B, t("Weekly limit, by product", "주간 한도를 제품별로"), X,
+             t("window opened", "창 시작"), _utc(bd["window_started_at"])))
     for r in sorted(bd["rows"], key=lambda r: -r["percent"]):
         bar = "█" * int(round(r["percent"] / 4))
         extra = ""
         if weekly is not None and abs(tot - 100) < 1e-6:
-            extra = "   주간 한도의 %.1f%%p" % (weekly * r["percent"] / 100.0)
+            extra = t("   %.1f%%p of the weekly limit", "   주간 한도의 %.1f%%p") % (
+                weekly * r["percent"] / 100.0)
         print("      %-12s %5.1f%%  %-25s%s" % (r["name"] or r["key"], r["percent"], bar, extra))
     if abs(tot - 100) > 1e-6:
-        print("%s      합이 %.1f 이라 '소진분 중 비중'이 아닐 수 있다. 뜻을 다시 볼 것.%s"
-              % (Y, tot, X))
+        print("%s      %s%s"
+              % (Y, t("Rows sum to %.1f, so this may not be 'share of what was burned'. Re-check the meaning.",
+                      "합이 %.1f 이라 '소진분 중 비중'이 아닐 수 있다. 뜻을 다시 볼 것.") % tot, X))
 
 
 def _utc(t):
@@ -309,21 +328,26 @@ def append_log(data):
         row["breakdown"] = {"window_started_at": bd["window_started_at"],
                             "rows": [{k: r.get(k) for k in KEEP_SHARE} for r in bd["rows"]]}
     if not row["limits"]:
-        print("%s한도 항목이 비어 기록하지 않았다.%s" % (Y, X))
+        print("%s%s%s" % (Y, t("Limit list was empty, nothing recorded.",
+                               "한도 항목이 비어 기록하지 않았다."), X))
         return
     os.makedirs(os.path.dirname(LOG), exist_ok=True)
     with open(LOG, "a", encoding="utf-8") as f:
         f.write(json.dumps(row, ensure_ascii=False) + "\n")
     n = sum(1 for _ in open(LOG, encoding="utf-8", errors="replace"))
-    print("기록 1줄 추가 → %s (총 %d줄)" % (os.path.relpath(LOG, ROOT), n))
+    print(t("Appended 1 sample → %s (%d total)", "기록 1줄 추가 → %s (총 %d줄)")
+          % (os.path.relpath(LOG, ROOT), n))
 
 
 def tail(n):
     if not os.path.exists(LOG):
-        print("%s아직 기록이 없다. --log 로 모으기 시작하라.%s" % (Y, X))
+        print("%s%s%s" % (Y, t("No samples yet. Start collecting with --log.",
+                               "아직 기록이 없다. --log 로 모으기 시작하라."), X))
         return
     lines = open(LOG, encoding="utf-8", errors="replace").readlines()
-    print("%s총 %d줄 중 마지막 %d줄%s" % (D, len(lines), min(n, len(lines)), X))
+    shown, total = min(n, len(lines)), len(lines)
+    print("%s%s%s" % (D, t("last %d of %d samples", "총 %d줄 중 마지막 %d줄")
+                      % ((shown, total) if not is_ko() else (total, shown)), X))
     for line in lines[-n:]:
         try:
             r = json.loads(line)
@@ -347,14 +371,16 @@ def main():
         return 0
     data = fetch()
     if "--shape" in sys.argv:
-        print("%s응답 구조 (값은 숫자만 보여준다)%s" % (B, X))
+        print("%s%s%s" % (B, t("Response structure (only numbers are shown as values)",
+                               "응답 구조 (값은 숫자만 보여준다)"), X))
         shape(data)
         return 0
     if "--log" in sys.argv:
         append_log(data)
         return 0
     show(data)
-    print("%s--log 기록 · --shape 응답 구조 · --tail N 쌓인 기록%s" % (D, X))
+    print("%s%s%s" % (D, t("--log record · --shape response structure · --tail N recorded samples",
+                           "--log 기록 · --shape 응답 구조 · --tail N 쌓인 기록"), X))
     return 0
 
 

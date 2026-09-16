@@ -26,6 +26,8 @@ import json, os, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
+sys.path.insert(0, HERE)
+from i18n import t                              # noqa: E402  (경로를 넣은 뒤라야 한다)
 LOG = os.path.join(ROOT, "data", "ratelimit-log.jsonl")
 STATE = os.path.expanduser("~/.claude")
 
@@ -85,7 +87,7 @@ def line(data):
     cost = (data.get("cost") or {}).get("total_cost_usd")
     if cost is not None:
         # 실제 청구액이 아니라 "API 정가로 냈다면" 환산액이다. 구독은 월정액이다.
-        parts.append("환산 $%.2f" % cost)
+        parts.append(t("API-eq $%.2f", "환산 $%.2f") % cost)
     fh = ((data.get("rate_limits") or {}).get("five_hour") or {}).get("used_percentage")
     if fh is not None:
         parts.append("5h %.0f%%" % fh)

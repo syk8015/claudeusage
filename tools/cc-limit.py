@@ -22,6 +22,10 @@ cc-limit.py — 5시간/주간 한도가 무엇을 먹고 오르는지 역산한
 import json, os, sys, glob, time, calendar, bisect, importlib.util
 from collections import defaultdict
 
+import os, sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from i18n import t
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 
@@ -44,6 +48,16 @@ TOK = ["input", "output", "cache_read", "cache_write_5m", "cache_write_1h"]
 GROUPS = [("출력", ["output"]),
           ("신규입력", ["input", "cache_write_5m", "cache_write_1h"]),
           ("캐시읽기", ["cache_read"])]
+
+# 묶음 이름과 가설 이름은 dict 키이자 cc-chat.py 가 run_fit 에 넘기는 값이라
+# 한국어 그대로 둔다. 화면에 나갈 때만 아래 표로 갈아 끼운다.
+GROUP_LABEL = {"출력": t("output", "출력"),
+               "신규입력": t("fresh input", "신규입력"),
+               "캐시읽기": t("cache read", "캐시읽기")}
+
+
+def gl(name):
+    return GROUP_LABEL.get(name, name)
 
 # ── 모델별 100만 토큰당 단가 (입력, 출력). 반드시 긴 이름부터.
 #
@@ -123,8 +137,8 @@ def to_epoch(s):
         return None
 
 
-def utc(t, fmt="%m-%d %H:%M"):
-    return time.strftime(fmt, time.gmtime(t)) if t else "-"
+def utc(ts, fmt="%m-%d %H:%M"):
+    return time.strftime(fmt, time.gmtime(ts)) if ts else "-"
 
 
 # ────────────────────────────────────────────── 1. 한도 표본 읽기
@@ -136,21 +150,21 @@ def load_samples(log_path, field):
     for e in raw:
         sid = e.get("session_id")
         if not sid or sid == "test-preview":
-            skip["합성·무명 행"] += 1
+            skip[t("synthetic/unnamed rows", "합성·무명 행")] += 1
             continue
         if e.get("agent_type") or (e.get("agent") or {}).get("name"):
-            skip["서브에이전트 렌더"] += 1
+            skip[t("subagent renders", "서브에이전트 렌더")] += 1
             continue
         w = (e.get("rate_limits") or {}).get(field) or {}
         pct, reset = w.get("used_percentage"), w.get("resets_at")
         if pct is None or reset is None:
-            skip["%s 값 없음" % field] += 1
+            skip[t("no %s value", "%s 값 없음") % field] += 1
             continue
-        t = to_epoch(e.get("logged_at"))
-        if t is None:
-            skip["시각 파싱 실패"] += 1
+        ts = to_epoch(e.get("logged_at"))
+        if ts is None:
+            skip[t("timestamp parse failed", "시각 파싱 실패")] += 1
             continue
-        rows.append({"t": t, "sid": sid, "pct": int(round(float(pct))),
+        rows.append({"t": ts, "sid": sid, "pct": int(round(float(pct))),
                      "reset": int(reset),
                      "cost": (e.get("cost") or {}).get("total_cost_usd")})
     rows.sort(key=lambda r: (r["t"], r["sid"]))
@@ -277,12 +291,12 @@ def request_index(t_lo, t_hi, verbose=False):
                     dupes += 1
                     continue
                 seen.add(mid)
-                t = to_epoch(e.get("timestamp"))
-                if t is None or t <= t_lo or t > t_hi:
+                ts = to_epoch(e.get("timestamp"))
+                if ts is None or ts <= t_lo or ts > t_hi:
                     continue
                 cc = u.get("cache_creation") or {}
                 reqs.append({
-                    "t": t, "mk": model_key(msg.get("model")), "cost": usage_cost(msg),
+                    "t": ts, "mk": model_key(msg.get("model")), "cost": usage_cost(msg),
                     "input": u.get("input_tokens", 0) or 0,
                     "output": u.get("output_tokens", 0) or 0,
                     "cache_read": u.get("cache_read_input_tokens", 0) or 0,
@@ -291,7 +305,8 @@ def request_index(t_lo, t_hi, verbose=False):
                 })
     reqs.sort(key=lambda r: r["t"])
     if verbose:
-        print("%s기록 %d개 파일에서 요청 %d건 (중복 %d건 제거)%s"
+        print(t("%s%d log files · %d requests (%d duplicates removed)%s",
+                "%s기록 %d개 파일에서 요청 %d건 (중복 %d건 제거)%s")
               % (D, scanned, len(reqs), dupes, X), file=sys.stderr)
     return reqs
 
@@ -416,6 +431,11 @@ def build(rows, kind):
 
 HYPOTHESES = ["요청 수", "API환산 $", "모델별 $", "토큰 종류별"]
 
+HYP_LABEL = {"요청 수": t("requests", "요청 수"),
+             "API환산 $": t("API-eq $", "API환산 $"),
+             "모델별 $": t("per model $", "모델별 $"),
+             "토큰 종류별": t("per token type", "토큰 종류별")}
+
 
 def run_fit(rows, kind):
     Xm, labels = build(rows, kind)
@@ -437,26 +457,32 @@ def print_fit(wins, steps, label):
     wagg = [agg([s for s in w["steps"] if s.get("reqs") and not s.get("offlog")]) for w in wins
             if any(s.get("reqs") and not s.get("offlog") for s in w["steps"])]
 
-    print("\n%s%s 한도 가설 적합%s" % (B, label, X))
-    print("%s변화점 %d개(잡음 큼, Δ%%p 가 1 에 몰림) / 창 %d개(잡음 작음, 표본 적음)%s"
+    print("\n%s%s %s%s" % (B, label, t("limit hypothesis fit", "한도 가설 적합"), X))
+    print(t("%s%d change points (noisy, Δ%%p piles up at 1) / %d windows (less noise, fewer samples)%s",
+            "%s변화점 %d개(잡음 큼, Δ%%p 가 1 에 몰림) / 창 %d개(잡음 작음, 표본 적음)%s")
           % (D, len(use), len(wagg), X))
     if off:
-        print("%s로그 밖 소비 의심 변화점 %d개 · %.0f%%p 는 뺐다 (채팅·다른 기기 몫)%s"
+        print(t("%s%d change points suspected off-log · %.0f%%p dropped (chat / other devices)%s",
+                "%s로그 밖 소비 의심 변화점 %d개 · %.0f%%p 는 뺐다 (채팅·다른 기기 몫)%s")
               % (Y, len(off), sum(s["dpct"] for s in off), X))
     if len(use) < 20:
-        print("%s변화점이 %d개뿐이다. 결과를 믿지 말 것.%s" % (R, len(use), X))
+        print(t("%sOnly %d change points. Do not trust this.%s",
+                "%s변화점이 %d개뿐이다. 결과를 믿지 말 것.%s") % (R, len(use), X))
         if not use:
             return
     elif len(use) < 50:
-        print("%s변화점이 50개 미만이다. 방향만 참고할 것.%s" % (Y, X))
+        print(t("%sFewer than 50 change points. Direction only.%s",
+                "%s변화점이 50개 미만이다. 방향만 참고할 것.%s") % (Y, X))
 
     fits = {}
-    print("\n%s가설            변화점 R²   오차%%    창 R²   오차%%%s" % (D, X))
+    print("\n%s%s%s" % (D, t("%-14s %8s %7s %8s %7s"
+                             % ("hypothesis", "step R²", "err%", "win R²", "err%"),
+                             "가설            변화점 R²   오차%    창 R²   오차%"), X))
     for kind in HYPOTHESES:
         fs, fw = run_fit(use, kind), run_fit(wagg, kind)
         fits[kind] = (fs, fw)
         print("%-14s %8s %7s %8s %7s"
-              % (kind,
+              % (HYP_LABEL[kind],
                  "%.3f" % fs["r2"] if fs else "-", "%.0f" % fs["rel"] if fs else "-",
                  "%.3f" % fw["r2"] if fw else "-", "%.0f" % fw["rel"] if fw else "-"))
 
@@ -465,26 +491,34 @@ def print_fit(wins, steps, label):
         fw = fits[kind][1]
         if not fw:
             continue
-        print("\n%s%s%s  (창 %d개 기준)" % (B, kind, X, fw["n"]))
+        print("\n%s%s%s  %s" % (B, HYP_LABEL[kind], X,
+                                t("(from %d windows)", "(창 %d개 기준)") % fw["n"]))
         for lb, w in sorted(zip(fw["labels"], fw["b"]), key=lambda kv: -kv[1]):
             if lb in fw["dropped"]:
                 continue
             if kind == "요청 수":
-                print("      요청 1건 = %.3f%%p   100%% 에 %.0f건" % (w, 100 / w) if w else "")
+                print(t("      1 request = %.3f%%p   %.0f requests to 100%%",
+                        "      요청 1건 = %.3f%%p   100%% 에 %.0f건") % (w, 100 / w) if w else "")
             elif kind in ("API환산 $", "모델별 $"):
-                print("      %-10s %7.4f %%p/$   1%%p 당 $%.2f" % (lb, w, 1 / w))
+                print(t("      %-10s %7.4f %%p/$   $%.2f per 1%%p",
+                        "      %-10s %7.4f %%p/$   1%%p 당 $%.2f") % (lb, w, 1 / w))
             else:
-                print("      %-10s %8.2f %%p/100만토큰   1%%p 당 %s토큰"
-                      % (lb, w, _human(1e6 / w)))
+                print(t("      %-11s %8.2f %%p/1M tok   %s tok per 1%%p",
+                        "      %-10s %8.2f %%p/100만토큰   1%%p 당 %s토큰")
+                      % (gl(lb), w, _human(1e6 / w)))
         for lb in fw["dropped"]:
             why = ""
             if kind == "토큰 종류별" and lb == "캐시읽기":
-                why = " (모델 효과에 가린 착시다. 아래 모델별을 볼 것)"
-            print("      %s%-10s 0 으로 눌림 — 다른 항목과 갈라지지 않는다%s%s" % (Y, lb, why, X))
+                why = t(" (an illusion hidden by model effects — see per model below)",
+                        " (모델 효과에 가린 착시다. 아래 모델별을 볼 것)")
+            print(t("      %s%-11s pinned to 0 — not separable from the others%s%s",
+                    "      %s%-10s 0 으로 눌림 — 다른 항목과 갈라지지 않는다%s%s")
+                  % (Y, gl(lb), why, X))
 
     # ── 모델별 토큰 무게. 교차모델 적합에서 캐시읽기가 0(또는 음수)으로 나오는 건
     #    모델 효과에 가린 착시다. 한 모델 안에서 보면 작지만 양수로 살아난다.
-    print("\n%s모델별%s  한 모델이 비용의 90%% 이상인 변화점만 모았다" % (B, X))
+    print(t("\n%sper model%s  only change points where one model is 90%%+ of cost",
+            "\n%s모델별%s  한 모델이 비용의 90%% 이상인 변화점만 모았다") % (B, X))
     names = [g[0] for g in GROUPS]
     models = sorted({m for r in use for m in r["cost_by_model"]},
                     key=lambda m: -sum(r["cost_by_model"].get(m, 0) for r in use))
@@ -497,10 +531,15 @@ def print_fit(wins, steps, label):
             continue
         a = agg(pure)
         if a["dpct"] < 5:
-            print("      %s%-10s 순수 변화점 %d개, %.0f%%p — 부족%s" % (D, m, len(pure), a["dpct"], X))
+            print(t("      %s%-10s pure steps %d, %.0f%%p — too few%s",
+                    "      %s%-10s 순수 변화점 %d개, %.0f%%p — 부족%s")
+                  % (D, m, len(pure), a["dpct"], X))
             continue
-        print("      %s%-10s%s 순수 변화점 %3d개 · %3.0f%%p · $%.2f" % (B, m, X, len(pure), a["dpct"], a["dpct"] and a["cost"]))
-        print("        1%%p 당  $%.2f   출력 %s · 신규입력 %s · 캐시읽기 %s 토큰"
+        print(t("      %s%-10s%s pure steps %3d · %3.0f%%p · $%.2f",
+                "      %s%-10s%s 순수 변화점 %3d개 · %3.0f%%p · $%.2f")
+              % (B, m, X, len(pure), a["dpct"], a["dpct"] and a["cost"]))
+        print(t("        per 1%%p  $%.2f   output %s · fresh input %s · cache read %s tokens",
+                "        1%%p 당  $%.2f   출력 %s · 신규입력 %s · 캐시읽기 %s 토큰")
               % (a["cost"] / a["dpct"], _human(a["출력"] / a["dpct"]),
                  _human(a["신규입력"] / a["dpct"]), _human(a["캐시읽기"] / a["dpct"])))
         byw = defaultdict(list)
@@ -509,7 +548,8 @@ def print_fit(wins, steps, label):
         per_pct[m] = dict({n: a[n] / a["dpct"] for n in names},
                           cost=a["cost"] / a["dpct"], wins=len(byw))
         bins = [agg(v) for v in byw.values()]
-        rowset, lvl = (bins, "창") if len(bins) >= 5 else ([agg([s2]) for s2 in pure], "변화점")
+        rowset, lvl = ((bins, t("window", "창")) if len(bins) >= 5
+                       else ([agg([s2]) for s2 in pure], t("step", "변화점")))
         if len(rowset) < 4:
             continue
         Xm = [[r[n] / 1e6 for n in names] for r in rowset]
@@ -517,37 +557,43 @@ def print_fit(wins, steps, label):
         if not b:
             continue
         r2, mae, rel = fit_stats(Xm, [r["dpct"] for r in rowset], b)
-        print("        %s단위 n=%d  R² %.3f 오차 %.0f%%   %s%s"
+        print(t("        per %s n=%d  R² %.3f err %.0f%%   %s%s",
+                "        %s단위 n=%d  R² %.3f 오차 %.0f%%   %s%s")
               % (lvl, len(rowset), r2, rel,
-                 " · ".join("%s %.1f" % (n, v) for n, v in zip(names, b)),
-                 ("   [0: %s]" % ",".join(dropped)) if dropped else ""))
+                 " · ".join("%s %.1f" % (gl(n), v) for n, v in zip(names, b)),
+                 ("   [0: %s]" % ",".join(gl(n) for n in dropped)) if dropped else ""))
 
     # ── 배율표. 1%p 올리는 데 든 양의 역비다. 토큰당으로 본다. 달러당은 세션 스타일
     #    (대화를 얼마나 길게 끄는가)이 섞여 모델 가중치가 아니다. 참고로만 붙인다.
     base = per_pct.get("opus-5")
     if base:
-        print("\n%s배율%s  opus-5 = 1, 클수록 한도가 빨리 닳는다 (토큰당)" % (B, X))
+        print(t("\n%smultiplier%s  opus-5 = 1; higher burns the limit faster (per token)",
+                "\n%s배율%s  opus-5 = 1, 클수록 한도가 빨리 닳는다 (토큰당)") % (B, X))
         for m, a in per_pct.items():
             if m == "opus-5":
                 continue
-            print("      %-10s 출력 %.1f배 · 신규입력 %.1f배 · 캐시읽기 %.1f배   %s(달러당 %.1f배 · 창 %d개%s)%s"
+            print(t("      %-10s output %.1fx · fresh input %.1fx · cache read %.1fx   %s(per $ %.1fx · %d windows%s)%s",
+                    "      %-10s 출력 %.1f배 · 신규입력 %.1f배 · 캐시읽기 %.1f배   %s(달러당 %.1f배 · 창 %d개%s)%s")
                   % (m, *(base[n] / a[n] if a[n] else 0.0 for n in names), D,
                      base["cost"] / a["cost"] if a["cost"] else 0.0, a["wins"],
-                     " — 적어서 흔들린다" if a["wins"] < 8 else "", X))
+                     t(" — too few, shaky", " — 적어서 흔들린다") if a["wins"] < 8 else "", X))
 
     tot = {n: sum(r[n] for r in wagg) for n in names}
     s_all = sum(tot.values()) or 1
-    print("\n%s토큰 비중 대 한도 기여%s" % (B, X))
-    print("%s      캐시읽기는 토큰의 %.1f%% 를 차지한다. 토큰 하나당 무게는 신규입력의"
+    print("\n%s%s%s" % (B, t("token share vs limit contribution", "토큰 비중 대 한도 기여"), X))
+    print(t("%s      Cache read is %.1f%% of all tokens. Per token it weighs about 1/70 of",
+            "%s      캐시읽기는 토큰의 %.1f%% 를 차지한다. 토큰 하나당 무게는 신규입력의")
           % (D, 100 * tot["캐시읽기"] / s_all))
-    print("      1/70 쯤으로 아주 작지만, 개수가 60배가 넘어 기여는 비슷해진다.")
-    print("      돈은 캐시읽기가 거의 다 먹지만, 한도는 셋이 나눠 먹는다.%s" % X)
+    print(t("      fresh input — tiny, but there are 60x more of them, so the contributions",
+            "      1/70 쯤으로 아주 작지만, 개수가 60배가 넘어 기여는 비슷해진다."))
+    print(t("      end up similar. Money goes almost all to cache read; the limit is split three ways.%s",
+            "      돈은 캐시읽기가 거의 다 먹지만, 한도는 셋이 나눠 먹는다.%s") % X)
 
 def _human(v):
     if v >= 1e6:
-        return "%.1f백만" % (v / 1e6)
+        return t("%.1fM", "%.1f백만") % (v / 1e6)
     if v >= 1e3:
-        return "%.0f천" % (v / 1e3)
+        return t("%.0fk", "%.0f천") % (v / 1e3)
     return "%.0f" % v
 
 
@@ -562,10 +608,14 @@ def _mix(cost_by_model, total):
 
 def print_windows(wins, label, bar_cost):
     tot_steps = sum(len(w["steps"]) for w in wins)
-    print("\n%s%s 창별 한도 소진%s   창 %d개 · 변화점 %d개\n"
+    print(t("\n%s%s limit burn per window%s   %d windows · %d change points\n",
+            "\n%s%s 창별 한도 소진%s   창 %d개 · 변화점 %d개\n")
           % (B, label, X, len(wins), tot_steps))
-    print("%s창 리셋(UTC)      관측 구간          한도%%    Δ%%   Δ$기록  Δ$상태바   $/1%%p  요청  세션  모델 구성%s"
-          % (D, X))
+    print("%s%s%s"
+          % (D, t("%-12s  %-17s %-7s %4s %8s %8s %6s %5s %5s  %s"
+                  % ("reset (UTC)", "observed span", " limit%", "Δ%", "Δ$ log",
+                     "Δ$ bar", "$/1%p", "reqs", "sess", "models"),
+                  "창 리셋(UTC)      관측 구간          한도%    Δ%   Δ$기록  Δ$상태바   $/1%p  요청  세션  모델 구성"), X))
     rates = []
     for w in wins:
         a = agg(w["steps"])
@@ -575,11 +625,11 @@ def print_windows(wins, label, bar_cost):
         if inside["dpct"]:
             rates.append(inside["cost"] / inside["dpct"])
             per = "%6.2f" % rates[-1]
-        flag = " %s부분%s" % (Y, X) if w["p_first"] > 0 else ""
+        flag = " %s%s%s" % (Y, t("partial", "부분"), X) if w["p_first"] > 0 else ""
         if a["dpct"] > inside["dpct"]:
-            flag += " %s로그밖 %.0f%%p%s" % (Y, a["dpct"] - inside["dpct"], X)
+            flag += " %s%s %.0f%%p%s" % (Y, t("off-log", "로그밖"), a["dpct"] - inside["dpct"], X)
         if w is wins[-1]:
-            flag += " %s열림%s" % (Y, X)
+            flag += " %s%s%s" % (Y, t("open", "열림"), X)
         print("%s  %s→%s %3d→%-3d %4.0f %8.2f %8.2f %s %5d %5d  %s%s"
               % (utc(w["reset"], "%m-%d %H:%MZ"), utc(w["t_first"]), utc(w["t_last"], "%H:%M"),
                  w["p_first"], w["p_last"], a["dpct"], a["cost"], bar_cost.get(w["reset"], 0.0),
@@ -587,21 +637,30 @@ def print_windows(wins, label, bar_cost):
 
     tot = agg([s for w in wins for s in w["steps"]])
     if tot["dpct"]:
-        print("\n%s전체 %.0f%%p 에 API환산 $%.2f — 평균 1%%p 당 $%.2f%s"
+        print(t("\n%s%.0f%%p total for API-equivalent $%.2f — average $%.2f per 1%%p%s",
+                "\n%s전체 %.0f%%p 에 API환산 $%.2f — 평균 1%%p 당 $%.2f%s")
               % (B, tot["dpct"], tot["cost"], tot["cost"] / tot["dpct"], X))
         off = sum(s["dpct"] for w in wins for s in w["steps"] if s.get("offlog"))
         if off:
-            print("%s그중 %.0f%%p (%.0f%%) 는 로그 밖 소비 의심 — 채팅·앱·다른 기기가 같은 한도를 먹었다.%s"
+            print(t("%sof that %.0f%%p (%.0f%%) is suspected off-log — chat/app/other devices ate the same limit.%s",
+                    "%s그중 %.0f%%p (%.0f%%) 는 로그 밖 소비 의심 — 채팅·앱·다른 기기가 같은 한도를 먹었다.%s")
                   % (Y, off, 100 * off / tot["dpct"], X))
-            print("%s$/1%%p 는 그 몫을 빼고 냈다.%s" % (D, X))
+            print(t("%s$/1%%p is computed with that share removed.%s",
+                    "%s$/1%%p 는 그 몫을 빼고 냈다.%s") % (D, X))
     if len(rates) >= 4 and min(rates):
-        print("%s창별 $/1%%p 가 %.2f ~ %.2f (%.1f배 차이) — 한도는 API환산 달러에 비례하지 않는다.%s"
+        print(t("%s$/1%%p per window ranges %.2f ~ %.2f (%.1fx) — the limit is not proportional to API-equivalent dollars.%s",
+                "%s창별 $/1%%p 가 %.2f ~ %.2f (%.1f배 차이) — 한도는 API환산 달러에 비례하지 않는다.%s")
               % (D, min(rates), max(rates), max(rates) / min(rates), X))
 
 
 def print_steps(steps):
-    print("\n%s변화점 %d개%s   (tf, t1] 구간에 끝난 요청을 합산\n" % (B, len(steps), X))
-    print("%s창 리셋      귀속 구간 tf → t1     길이  한도%%   Δ%%  요청     API$  출력k 신규입력k 캐시읽기M  모델%s" % (D, X))
+    print(t("\n%s%d change points%s   requests finishing in (tf, t1] are summed\n",
+            "\n%s변화점 %d개%s   (tf, t1] 구간에 끝난 요청을 합산\n") % (B, len(steps), X))
+    print("%s%s%s"
+          % (D, t("%-12s  %-20s %6s %-7s %3s %4s %8s %6s %8s %8s  %s"
+                  % ("reset", "attribution tf → t1", "len", " limit%", "Δ%", "reqs",
+                     "API$", "out k", "fresh k", "cacheR M", "models"),
+                  "창 리셋      귀속 구간 tf → t1     길이  한도%   Δ%  요청     API$  출력k 신규입력k 캐시읽기M  모델"), X))
     for s in steps:
         a = agg([s])
         print("%s  %s→%s %5.0fs %3d→%-3d %3d %4d %8.3f %6.0f %8.0f %8.1f  %s%s"
@@ -609,7 +668,7 @@ def print_steps(steps):
                  s["t1"] - s["tf"], s["p0"], s["p1"], s["dpct"], s["reqs"], s["cost"],
                  a["출력"] / 1e3, a["신규입력"] / 1e3, a["캐시읽기"] / 1e6,
                  _mix(s["cost_by_model"], s["cost"]),
-                 "  %s로그밖%s" % (Y, X) if s.get("offlog") else ""))
+                 "  %s%s%s" % (Y, t("off-log", "로그밖"), X) if s.get("offlog") else ""))
 
 
 def write_csv(steps, path):
@@ -627,7 +686,7 @@ def write_csv(steps, path):
             row += [s.get(k, 0) for k in TOK]
             row += ["%.6f" % s.get("cost_by_model", {}).get(m, 0.0) for m in models]
             f.write(",".join(str(v) for v in row) + "\n")
-    print("변화점 %d개 → %s" % (len(steps), path))
+    print(t("%d change points → %s", "변화점 %d개 → %s") % (len(steps), path))
 
 
 # ────────────────────────────────────────────── 7. main
@@ -644,21 +703,27 @@ def main():
     log_path = opt("--log", DEFAULT_LOG)
     weekly = "--weekly" in sys.argv
     field = "seven_day" if weekly else "five_hour"
-    label = "7일" if weekly else "5시간"
+    label = t("7-day", "7일") if weekly else t("5-hour", "5시간")
     win_len = 7 * 86400 if weekly else 5 * 3600
 
     if not os.path.exists(log_path):
-        print("%s한도 게이지 표본이 없다: %s%s" % (R, log_path, X))
-        print("\n클로드코드는 한도 소진율을 화면에 찍고 버린다. 상태바에 수집기를 걸어야")
-        print("쌓인다. %s./install.sh%s 가 settings.json 에 넣을 조각을 찍어 준다.\n" % (B, X))
-        print("%s표본이 쌓이기 전에도 되는 것:%s" % (D, X))
-        print("%s  python3 tools/cc-value.py --all    살아남은 줄·낭비%s" % (D, X))
-        print("%s  python3 tools/cc-usage.py          지금 한도 + 제품별 분해%s" % (D, X))
+        print(t("%sNo limit gauge samples: %s%s",
+                "%s한도 게이지 표본이 없다: %s%s") % (R, log_path, X))
+        print(t("\nClaude Code prints the limit burn on screen and throws it away. A collector",
+                "\n클로드코드는 한도 소진율을 화면에 찍고 버린다. 상태바에 수집기를 걸어야"))
+        print(t("has to sit on your status line. %s./install.sh%s prints the settings.json snippet.\n",
+                "쌓인다. %s./install.sh%s 가 settings.json 에 넣을 조각을 찍어 준다.\n") % (B, X))
+        print(t("%sWhat works before samples pile up:%s",
+                "%s표본이 쌓이기 전에도 되는 것:%s") % (D, X))
+        print(t("%s  python3 tools/cc-value.py --all    surviving lines · waste%s",
+                "%s  python3 tools/cc-value.py --all    살아남은 줄·낭비%s") % (D, X))
+        print(t("%s  python3 tools/cc-usage.py          limit now + per product%s",
+                "%s  python3 tools/cc-usage.py          지금 한도 + 제품별 분해%s") % (D, X))
         return 1
 
     rows, skip, n_raw = load_samples(log_path, field)
     if not rows:
-        print("%s쓸 수 있는 표본이 없다.%s" % (R, X))
+        print(t("%sNo usable samples.%s", "%s쓸 수 있는 표본이 없다.%s") % (R, X))
         return 1
 
     wins, steps = windows_and_steps(rows, win_len)
@@ -669,11 +734,14 @@ def main():
         write_csv(steps, opt("--csv", os.path.join(ROOT, "data", "limit-steps.csv")))
         return 0
 
-    print("%s표본 %d줄 중 %d줄 사용 · 창 %d개 · 변화점 %d개%s"
+    print(t("%s%d sample rows, %d used · %d windows · %d change points%s",
+            "%s표본 %d줄 중 %d줄 사용 · 창 %d개 · 변화점 %d개%s")
           % (D, n_raw, len(rows), len(wins), len(steps), X))
     if skip:
-        print("%s  제외: %s%s" % (D, ", ".join("%s %d" % kv for kv in sorted(skip.items())), X))
-    print("%s  창 안에서 값이 내려간 표본 %d건 — 오래된 스냅샷이라 누적최대로 읽어 무시함%s"
+        print("%s  %s %s%s" % (D, t("excluded:", "제외:"),
+                               ", ".join("%s %d" % kv for kv in sorted(skip.items())), X))
+    print(t("%s  %d samples went down inside a window — stale snapshots, read as running max and ignored%s",
+            "%s  창 안에서 값이 내려간 표본 %d건 — 오래된 스냅샷이라 누적최대로 읽어 무시함%s")
           % (D, sum(w["stale"] for w in wins), X))
 
     if "--steps" in sys.argv:
@@ -682,7 +750,8 @@ def main():
         print_fit(wins, steps, label)
     else:
         print_windows(wins, label, cost_by_window(rows, win_len))
-        print("\n%s--steps 변화점 전부 · --fit 가설 적합 · --weekly 7일 창 · --csv 내보내기%s" % (D, X))
+        print(t("\n%s--steps all change points · --fit hypothesis fit · --weekly 7-day window · --csv export%s",
+                "\n%s--steps 변화점 전부 · --fit 가설 적합 · --weekly 7일 창 · --csv 내보내기%s") % (D, X))
     return 0
 
 

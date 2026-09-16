@@ -26,6 +26,9 @@ Max 구독이라 실제 청구액은 아니며 "API 정가로 냈다면" 환산�
 import json, sys, os, glob, difflib, unicodedata, re
 from collections import defaultdict
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from i18n import t          # 화면에 나가는 말만 영/한. 주석·키는 한국어 그대로
+
 # ── 모델별 100만 토큰당 단가 (입력, 출력)
 #
 # 순서가 중요하다. 앞에서부터 부분 문자열로 맞춰 보므로 반드시 긴 이름이 먼저여야
@@ -456,9 +459,16 @@ def project_dir(target=None):
     return cand
 
 
+def label_text():
+    """머리말에 찍을 라벨. anon() 에 들어가는 _LABEL 원본은 절대 바꾸지 않는다.
+    (라벨을 번역해서 넘기면 같은 대상의 익명 ID 가 언어에 따라 달라진다.)"""
+    lab = globals().get("_LABEL", os.getcwd())
+    return t("all projects", "모든 프로젝트") if lab == "모든 프로젝트" else lab
+
+
 def print_waste(paths):
     """세션별 낭비 진단을 돈으로 보여준다."""
-    print(f"\n\033[1m낭비 진단\033[0m  —  {globals().get('_LABEL', os.getcwd())}\n")
+    print(f"\n\033[1m{t('Waste', '낭비 진단')}\033[0m  —  {label_text()}\n")
     agg = defaultdict(float)
     for p in paths:
         entries = session_entries(p)
@@ -470,43 +480,70 @@ def print_waste(paths):
         for k in ("total", "rework", "errors", "denials", "bloat"):
             agg[k] += w[k]
         sid = os.path.basename(p)[:8]
-        print(f"\033[1m{sid}\033[0m   총 ${w['total']:.2f}")
+        print(f"\033[1m{sid}\033[0m   {t('total', '총')} ${w['total']:.2f}")
 
+        # 셋째 칸은 '건수'다. 전에는 문구에서 "0번"을 찾아 0건 줄을 걸렀는데,
+        # 문구가 영어도 되면 그 방법이 안 먹어서 숫자를 그대로 들고 다닌다.
         rows = [
-            ("재작업",       w["rework"],  f"편집의 {w['rework_ratio']*100:.0f}%가 나중에 덮어써짐"),
-            ("실패한 호출",   w["errors"],  f"{w['errors_n']}번 실패"),
-            ("거부당한 호출", w["denials"], f"{w['denials_n']}번 거부"),
+            (t("rework", "재작업"), w["rework"], None,
+             t(f"{w['rework_ratio']*100:.0f}% of edits later overwritten",
+               f"편집의 {w['rework_ratio']*100:.0f}%가 나중에 덮어써짐")),
+            (t("failed calls", "실패한 호출"), w["errors"], w["errors_n"],
+             t(f"{w['errors_n']} failures", f"{w['errors_n']}번 실패")),
+            (t("rejected", "거부당한 호출"), w["denials"], w["denials_n"],
+             t(f"{w['denials_n']} rejected", f"{w['denials_n']}번 거부")),
         ]
         recoverable = 0.0
-        for name, cost, note in rows:
-            if cost < 0.005 and "0번" in note:
+        for name, cost, n, note in rows:
+            if cost < 0.005 and n == 0:
                 continue
             pct = cost / w["total"] * 100 if w["total"] else 0
             recoverable += cost
             print(f"    {name:<12} ${cost:>7.2f}  {pct:>4.0f}%   {note}")
         print(f"    {'─'*46}")
-        print(f"    {'되찾을 수 있던 돈':<12} ${recoverable:>7.2f}  "
+        print(f"    {t('recoverable', '되찾을 수 있던 돈'):<12} ${recoverable:>7.2f}  "
               f"{recoverable/w['total']*100 if w['total'] else 0:>4.0f}%")
-        print(f"    \033[2m컨텍스트 비대  ${w['bloat']:>7.2f}  "
-              f"{w['bloat']/w['total']*100 if w['total'] else 0:>4.0f}%   "
-              f"대화가 길어져 매번 더 읽은 값 (위 항목과 겹침)"
-              + (f" · 압축 {w['compacts']}회" if w["compacts"] else "") + "\033[0m")
+        print("    \033[2m" + t(f"{'ctx bloat':<12} ", "컨텍스트 비대  ")
+              + f"${w['bloat']:>7.2f}  "
+              + f"{w['bloat']/w['total']*100 if w['total'] else 0:>4.0f}%   "
+              + t("re-read every turn as the chat grew (overlaps the above)",
+                  "대화가 길어져 매번 더 읽은 값 (위 항목과 겹침)")
+              + ((t(f" · {w['compacts']} compacts", f" · 압축 {w['compacts']}회"))
+                 if w["compacts"] else "") + "\033[0m")
         print()
 
-    t = agg["total"]
-    if not t:
+    tot = agg["total"]                      # t 는 번역 함수 이름이라 tot 로 쓴다
+    if not tot:
         return
     print("═" * 62)
-    print(f"\033[1m전체 ${t:.2f}\033[0m 중")
-    for name, key in (("재작업", "rework"), ("실패한 호출", "errors"),
-                      ("거부당한 호출", "denials"), ("컨텍스트 비대", "bloat")):
-        print(f"  {name:<14} ${agg[key]:>7.2f}   {agg[key]/t*100:>4.1f}%")
+    print(t(f"\033[1mOf ${tot:.2f} total\033[0m", f"\033[1m전체 ${tot:.2f}\033[0m 중"))
+    for name, key in ((t("rework", "재작업"), "rework"),
+                      (t("failed calls", "실패한 호출"), "errors"),
+                      (t("rejected", "거부당한 호출"), "denials"),
+                      (t("context bloat", "컨텍스트 비대"), "bloat")):
+        print(f"  {name:<14} ${agg[key]:>7.2f}   {agg[key]/tot*100:>4.1f}%")
     small = agg["rework"] + agg["errors"] + agg["denials"]
-    print(f"\n  \033[2m재작업·실패·거부를 다 합쳐도 {small/t*100:.1f}%. "
-          f"컨텍스트 비대가 {agg['bloat']/t*100:.1f}%로 그 {agg['bloat']/small:.0f}배다.\033[0m")
+    print("\n  \033[2m" + t(
+        f"rework + failures + rejections together are only {small/tot*100:.1f}%. "
+        f"Context bloat is {agg['bloat']/tot*100:.1f}% — {agg['bloat']/small:.0f}x that.",
+        f"재작업·실패·거부를 다 합쳐도 {small/tot*100:.1f}%. "
+        f"컨텍스트 비대가 {agg['bloat']/tot*100:.1f}%로 그 {agg['bloat']/small:.0f}배다.") + "\033[0m")
 
 
 ACT_ORDER = ["쓰기", "빌드·검증", "읽기", "조사", "실행", "브라우저", "위임", "대화", "기타"]
+
+# 활동 이름은 내부 키이자 내보내는 값이라(유출 검사 허용목록 _OK_WORDS 가 이걸 쓴다)
+# 절대 번역하지 않는다. 화면에 찍을 때만 아래 표로 바꿔 보여준다.
+ACT_EN = {
+    "쓰기": "write", "빌드·검증": "build", "읽기": "read", "조사": "web",
+    "실행": "exec", "브라우저": "browser", "위임": "agent", "대화": "talk",
+    "기타": "other",
+}
+
+
+def act_label(a):
+    """표에 찍을 활동 이름. 칸이 8자라 영어는 짧게."""
+    return t(ACT_EN.get(a, a), a)
 
 
 # ────────────────────────────────────────────── 내보내기 (W4)
@@ -639,7 +676,8 @@ def audit_export(payload):
         if isinstance(node, dict):
             for k, v in node.items():
                 if not ok_key(k):
-                    problems.append((path, f"허용되지 않은 키: {str(k)[:50]}"))
+                    problems.append((path, t(f"key not allowed: {str(k)[:50]}",
+                                             f"허용되지 않은 키: {str(k)[:50]}")))
                 walk(v, f"{path}.{k}")
         elif isinstance(node, list):
             for i, v in enumerate(node):
@@ -650,9 +688,11 @@ def audit_export(payload):
             if (node in _OK_MODELS or node in _OK_WORDS
                     or _OK_HOUR.match(node) or _OK_ID.match(node)):
                 return
-            problems.append((path, f"허용되지 않은 문자열: {node[:50]}"))
+            problems.append((path, t(f"string not allowed: {node[:50]}",
+                                     f"허용되지 않은 문자열: {node[:50]}")))
         else:
-            problems.append((path, f"알 수 없는 타입: {type(node).__name__}"))
+            problems.append((path, t(f"unknown type: {type(node).__name__}",
+                                     f"알 수 없는 타입: {type(node).__name__}")))
 
     walk(payload, "$")
     return problems
@@ -663,24 +703,29 @@ def print_export(paths):
     problems = audit_export(payload)
     text = json.dumps(payload, ensure_ascii=False, indent=2)
 
-    print(f"\n\033[1m내보낼 데이터 전부\033[0m  ({len(text):,}자, 세션 {len(payload['sessions'])}개)\n")
+    print("\n\033[1m" + t("Everything that would be sent", "내보낼 데이터 전부") + "\033[0m  "
+          + t(f"({len(text):,} chars, {len(payload['sessions'])} sessions)",
+              f"({len(text):,}자, 세션 {len(payload['sessions'])}개)") + "\n")
     print(text)
 
-    print(f"\n\033[1m유출 검사\033[0m")
+    print(f"\n\033[1m{t('Leak check', '유출 검사')}\033[0m")
     if problems:
-        print(f"  \033[31m{len(problems)}건 걸림 — 내보내면 안 됩니다\033[0m")
+        print("  \033[31m" + t(f"{len(problems)} hits — do not export",
+                               f"{len(problems)}건 걸림 — 내보내면 안 됩니다") + "\033[0m")
         for path, why in problems[:20]:
             print(f"    {path}  {why}")
     else:
-        print("  \033[32m통과\033[0m — 숫자와 허용된 문자열만 있습니다")
-        print("  경로·파일명·코드 조각·명령어·프롬프트는 하나도 담기지 않았습니다")
+        print(f"  \033[32m{t('PASS', '통과')}\033[0m — "
+              + t("numbers and allowlisted strings only", "숫자와 허용된 문자열만 있습니다"))
+        print("  " + t("no paths, filenames, code, commands or prompts are included",
+                       "경로·파일명·코드 조각·명령어·프롬프트는 하나도 담기지 않았습니다"))
 
 
 def print_mix(paths):
     """돈이 어느 활동으로 갔는지, 그리고 코딩 몫만 따진 효율."""
-    print(f"\n\033[1m돈이 어디로 갔나\033[0m  —  {globals().get('_LABEL', os.getcwd())}\n")
-    head = "".join(f"{a:>8}" for a in ACT_ORDER)
-    print(f"{'세션':<10}{'비용':>9}{head}")
+    print(f"\n\033[1m{t('Where the money went', '돈이 어디로 갔나')}\033[0m  —  {label_text()}\n")
+    head = "".join(f"{act_label(a):>8}" for a in ACT_ORDER)
+    print(f"{t('session', '세션'):<10}{t('cost', '비용'):>9}{head}")
     print("─" * (19 + 8 * len(ACT_ORDER)))
 
     rows = []
@@ -701,9 +746,12 @@ def print_mix(paths):
             for a in ACT_ORDER)
         print(f"{sid:<10}${cost:>8.2f}{cells}")
 
-    print("\n\033[1m코딩 효율 — 코드를 만드는 데 쓴 돈만 따로 떼서\033[0m\n")
-    print(f"{'세션':<10}{'전체비용':>10}{'코딩몫':>9}{'비중':>6}"
-          f"{'살아남은줄':>10}{'전체기준':>10}{'코딩몫기준':>11}")
+    print("\n\033[1m" + t("Coding efficiency — only the money spent making code",
+                          "코딩 효율 — 코드를 만드는 데 쓴 돈만 따로 떼서") + "\033[0m\n")
+    print(f"{t('session', '세션'):<10}{t('cost', '전체비용'):>10}"
+          f"{t('coding', '코딩몫'):>9}{t('share', '비중'):>6}"
+          f"{t('surv', '살아남은줄'):>10}{t('$/ln all', '전체기준'):>10}"
+          f"{t('$/ln code', '코딩몫기준'):>11}")
     print("─" * 68)
     for sid, cost, act, m in sorted(rows, key=lambda r: -r[1]):
         surv = m["surv_add"] + m["surv_del"]
@@ -712,14 +760,17 @@ def print_mix(paths):
         coding = act.get("쓰기", 0) + act.get("빌드·검증", 0) + act.get("읽기", 0)
         if surv == 0:
             print(f"{sid:<10}${cost:>9.2f}${coding:>8.2f}{coding/cost*100:>5.0f}%"
-                  f"{'—':>10}{'측정 불가':>12}")
+                  f"{'—':>10}{t('no data', '측정 불가'):>12}")
             continue
         print(f"{sid:<10}${cost:>9.2f}${coding:>8.2f}{coding/cost*100:>5.0f}%"
               f"{surv:>10}{'$'+format(cost/surv,'.4f'):>10}"
               f"{'$'+format(coding/surv,'.4f'):>11}")
-    print(f"\n\033[2m전체기준 = 세션 비용을 전부 코드에 물린 값 (전 단계 방식)")
-    print(f"코딩몫기준 = 고치기 + 빌드·테스트·git + 그러려고 읽기에 쓴 돈만 물린 값.")
-    print(f"             브라우저 검증·외부 조사·분류 안 된 셸 작업은 뺐다\033[0m")
+    print("\n\033[2m" + t("$/ln all  = whole session cost charged to the code (previous method)",
+                          "전체기준 = 세션 비용을 전부 코드에 물린 값 (전 단계 방식)"))
+    print(t("$/ln code = only edits + build/test/git + the reading done for them.",
+            "코딩몫기준 = 고치기 + 빌드·테스트·git + 그러려고 읽기에 쓴 돈만 물린 값."))
+    print(t("            browser checks, web research and unclassified shell work are out",
+            "             브라우저 검증·외부 조사·분류 안 된 셸 작업은 뺐다") + "\033[0m")
 
 
 def opt(name, default=None):
@@ -750,15 +801,17 @@ def main():
     if "--all" in sys.argv:
         root = os.path.expanduser("~/.claude/projects")
         paths = sorted(glob.glob(os.path.join(root, "*", "*.jsonl")))
-        label = "모든 프로젝트"
+        label = "모든 프로젝트"          # anon() 에 들어가는 값이라 번역하지 않는다
         if not paths:
-            sys.exit(f"세션 기록을 못 찾음: {root}")
+            sys.exit(t(f"No session logs found: {root}", f"세션 기록을 못 찾음: {root}"))
     else:
         target = opt("--project")
         d = project_dir(target)
         if not os.path.isdir(d):
-            sys.exit(f"세션 기록을 못 찾음: {d}\n"
-                     f"다른 프로젝트를 보려면  --project <폴더경로>  또는  --all")
+            sys.exit(t(f"No session logs found: {d}\n"
+                       f"For another project use  --project <folder>  or  --all",
+                       f"세션 기록을 못 찾음: {d}\n"
+                       f"다른 프로젝트를 보려면  --project <폴더경로>  또는  --all"))
         label = os.path.abspath(target) if target else os.getcwd()
         paths = ([os.path.join(d, a + ".jsonl") for a in args] if args
                  else sorted(glob.glob(os.path.join(d, "*.jsonl"))))
@@ -775,9 +828,11 @@ def main():
         print_export(paths)
         return
 
-    print(f"\n\033[1m쓴 돈 대비 살아남은 결과\033[0m  —  {globals().get('_LABEL', os.getcwd())}\n")
-    print(f"{'세션':<10}{'비용':>9}{'편집':>6}"
-          f"{'  순진하게 센 것':>18}{'  살아남은 것':>16}{'   $/살아남은줄':>16}{'  에러':>6}")
+    print(f"\n\033[1m{t('Cost vs. what survived', '쓴 돈 대비 살아남은 결과')}\033[0m  —  {label_text()}\n")
+    print(t(f"{'session':<10}{'cost':>9}{'edits':>6}"
+            f"{'naive count':>17}{'surviving':>15}{'keep':>7}{'$/line':>10}{'err':>6}",
+            f"{'세션':<10}{'비용':>9}{'편집':>6}"
+            f"{'  순진하게 센 것':>18}{'  살아남은 것':>16}{'   $/살아남은줄':>16}{'  에러':>6}"))
     print("─" * 84)
 
     tot_cost = tot_naive = tot_surv = 0.0
@@ -806,22 +861,27 @@ def main():
 
     print("─" * 84)
     keep = f"{tot_surv/tot_naive*100:.0f}%" if tot_naive else "—"
-    print(f"{'합계':<10}${tot_cost:>8.2f}{'':>6}"
+    print(f"{t('TOTAL', '합계'):<10}${tot_cost:>8.2f}{'':>6}"
           f"{int(tot_naive):>17}{int(tot_surv):>15}{keep:>7}"
           f"{('$'+format(tot_cost/tot_surv,'.4f')) if tot_surv else '—':>10}")
-    print(f"\n\033[2m순진하게 센 것 = 편집 이벤트를 전부 더한 값 (기존 방식)")
-    print(f"살아남은 것   = 세션 시작·끝 상태를 복원해 그 차이만 센 값 (W1)\033[0m")
+    print("\n\033[2m" + t("naive count = every edit event summed up (the old way)",
+                          "순진하게 센 것 = 편집 이벤트를 전부 더한 값 (기존 방식)"))
+    print(t("surviving   = session start vs. end state, the difference only (W1)",
+            "살아남은 것   = 세션 시작·끝 상태를 복원해 그 차이만 센 값 (W1)") + "\033[0m")
 
     if detail and rows:
         for sid, cost, m, *_ in rows:
             if not m["per_file"]:
                 continue
-            print(f"\n\033[1m{sid} 파일별\033[0m")
+            print(f"\n\033[1m{sid} {t('by file', '파일별')}\033[0m")
             for f in sorted(m["per_file"], key=lambda x: -(x["add"] + x["del"]))[:12]:
+                n = f["edits"]
+                unit = t(format(" edit" if n == 1 else " edits", "<10"), "회 편집   ")
                 print(f"  {os.path.basename(f['path']):<38}"
-                      f"{f['edits']:>3}회 편집   +{f['add']:<6}-{f['del']}")
+                      f"{n:>3}{unit}+{f['add']:<6}-{f['del']}")
             if m["unresolved"]:
-                print(f"  \033[2m복원 실패 {m['unresolved']}개 파일은 제외\033[0m")
+                print("  \033[2m" + t(f"{m['unresolved']} files excluded (could not restore)",
+                                      f"복원 실패 {m['unresolved']}개 파일은 제외") + "\033[0m")
 
 
 if __name__ == "__main__":

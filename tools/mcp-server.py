@@ -27,9 +27,11 @@ import json, os, re, subprocess, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
+sys.path.insert(0, HERE)
+from i18n import t                              # noqa: E402  (경로를 넣은 뒤라야 한다)
 
 PROTOCOL_VERSION = "2025-06-18"
-SERVER = {"name": "claudeusage", "title": "구독 본전 계산기", "version": "0.1.0"}
+SERVER = {"name": "claudeusage", "title": "Subscription value meter", "version": "0.1.0"}
 
 RUN_TIMEOUT = 600          # 전체 기록을 훑는 분석은 분 단위가 걸린다
 MAX_CHARS = 60000          # 모델 컨텍스트를 통째로 먹지 않게 자른다
@@ -49,69 +51,77 @@ def _enum(desc, values, default):
 TOOLS = [
     {
         "name": "subscription_value",
-        "title": "구독 본전 보기",
+        "title": "Subscription value",
         "description": (
-            "클로드코드 사용이 실제로 무엇을 남겼는지 잰다. 편집 기록을 시간순으로 접어 "
-            "세션이 끝났을 때 **끝까지 살아남은 줄**만 세므로, 3턴 뒤에 갈아엎은 코드는 빠진다. "
-            "view 로 보는 각도를 고른다: summary(살아남은 줄·비용), waste(재작업·실패·거부·컨텍스트 "
-            "비대를 돈으로), mix(활동별 비용 분해), files(파일별 상세). "
-            "scope=project 면 project_path 가 필요하다."),
+            "Measures what Claude Code usage actually left behind. Edits are folded in time "
+            "order, so only lines that **survived to the end of the session** count — code "
+            "rewritten three turns later drops out. "
+            "view: summary (surviving lines and cost), waste (rework, failures, rejections and "
+            "context bloat priced in dollars), mix (cost by activity), files (per-file detail). "
+            "scope=project requires project_path."),
         "inputSchema": {
             "type": "object",
             "properties": {
-                "scope": _enum("all=모든 프로젝트, project=한 프로젝트", ["all", "project"], "all"),
+                "scope": _enum("all = every project, project = one project",
+                               ["all", "project"], "all"),
                 "project_path": {"type": "string",
-                                 "description": "scope=project 일 때 분석할 프로젝트의 절대경로"},
-                "view": _enum("보는 각도", ["summary", "waste", "mix", "files"], "summary"),
+                                 "description": "Absolute path of the project, when scope=project"},
+                "view": _enum("Which angle to report", ["summary", "waste", "mix", "files"],
+                              "summary"),
             },
         },
     },
     {
         "name": "limit_breakdown",
-        "title": "한도 분해",
+        "title": "Limit breakdown",
         "description": (
-            "5시간·주간 한도가 **무엇 때문에** 오르는지 역산한다. 돈이 아니라 한도가 구독자의 "
-            "진짜 제약이다. 캐시 읽기는 비용의 대부분이지만 한도 무게는 신규입력의 1/70 이라, "
-            "돈 아끼는 요령과 한도 아끼는 요령이 다르다. "
-            "view: windows(창별 소진), fit(모델별 가중치·배율 적합), steps(변화점 전부), "
-            "weekly(7일 창)."),
+            "Works out **what drives** the 5-hour and weekly rate limits. On a subscription the "
+            "real constraint is the limit gauge, not dollars. Cache reads are most of the cost "
+            "but weigh about 1/70 of fresh input against the limit, so saving money and saving "
+            "limit are different skills. "
+            "view: windows (burn per window), fit (per-model weights and multipliers), "
+            "steps (every change point), weekly (7-day windows)."),
         "inputSchema": {
             "type": "object",
             "properties": {
-                "view": _enum("보는 각도", ["windows", "fit", "steps", "weekly"], "windows"),
+                "view": _enum("Which angle to report",
+                              ["windows", "fit", "steps", "weekly"], "windows"),
             },
         },
     },
     {
         "name": "chat_share",
-        "title": "채팅이 먹은 한도",
+        "title": "Limit eaten by chat",
         "description": (
-            "한도는 계정 전체에 걸린다. claude.ai 채팅·앱도 같은 한도를 먹는데 로컬에는 "
-            "클로드코드 기록만 남으므로, 로그만 읽으면 소진을 덜 센다. 게이지 상승분에서 "
-            "로컬 로그로 설명되는 몫을 빼서 채팅 몫을 추정하고, 엔드포인트가 주는 제품별 "
-            "정답과 대조한다. view: weeks(주간 요약·정답 대조), windows(5시간 창별), "
-            "sources(소스별 커버리지)."),
+            "Rate limits apply to the whole account, so claude.ai chat and the mobile app drain "
+            "the same gauge while leaving no local trace — log-only tools undercount. This "
+            "subtracts what local logs explain from what the gauge actually did, and checks that "
+            "estimate against the per-product breakdown Anthropic returns. "
+            "view: weeks (weekly summary vs. that ground truth), windows (per 5-hour window), "
+            "sources (coverage of each data source)."),
         "inputSchema": {
             "type": "object",
             "properties": {
-                "view": _enum("보는 각도", ["weeks", "windows", "sources"], "weeks"),
+                "view": _enum("Which angle to report", ["weeks", "windows", "sources"], "weeks"),
             },
         },
     },
     {
         "name": "current_limits",
-        "title": "지금 한도",
+        "title": "Current limits",
         "description": (
-            "지금 남은 한도를 앤트로픽에 직접 물어 본다. 5시간·주간·모델별(Fable) 한도와 "
-            "**제품별 분해**(Claude Code / 채팅 / Cowork)가 온다. "
-            "맥 키체인에서 클로드코드 자격증명을 읽어 api.anthropic.com 에만 보낸다. "
-            "record=true 면 표본을 data/usage-log.jsonl 에 한 줄 남긴다 — 제품별 분해는 "
-            "주간 창 하나치만 오고 지나가면 다시 못 받으므로, 가끔 남겨 둘 값어치가 있다."),
+            "Asks Anthropic what is left right now: the 5-hour, weekly and per-model (Fable) "
+            "limits, plus the **per-product breakdown** (Claude Code / chat / Cowork). "
+            "Reads Claude Code's credentials from the macOS keychain and sends them only to "
+            "api.anthropic.com. "
+            "record=true appends one sample to data/usage-log.jsonl — the breakdown covers only "
+            "the current weekly window and is gone once that window rolls over, so it is worth "
+            "recording now and then."),
         "inputSchema": {
             "type": "object",
             "properties": {
                 "record": {"type": "boolean", "default": False,
-                           "description": "표본을 기록 파일에 한 줄 남길지"},
+                           "description": "Append one sample to the log file"},
             },
         },
     },
@@ -140,7 +150,8 @@ def build_argv(name, args):
             # 모델이 준 문자열이다. 셸에 안 넘기고, 실제로 있는 디렉터리인지만 본다.
             path = os.path.abspath(os.path.expanduser(path))
             if not os.path.isdir(path):
-                raise ValueError("project_path 가 실제 디렉터리가 아니다: %s" % path)
+                raise ValueError(t("project_path is not a directory: %s",
+                                   "project_path 가 실제 디렉터리가 아니다: %s") % path)
             argv += ["--project", path]
         else:
             argv += ["--all"]
@@ -151,25 +162,29 @@ def build_argv(name, args):
     view = args.get("view", "")
     if view:
         if view not in views:
-            raise ValueError("view 는 %s 중 하나여야 한다" % ", ".join(sorted(views)))
+            raise ValueError(t("view must be one of: %s", "view 는 %s 중 하나여야 한다")
+                             % ", ".join(sorted(views)))
         argv += views[view]
     return argv
 
 
 def run_tool(name, args):
     argv = build_argv(name, args)
-    log("실행: %s" % " ".join(argv[1:]))
+    log("run: %s" % " ".join(argv[1:]))
     try:
         p = subprocess.run(argv, cwd=ROOT, capture_output=True, text=True,
                            timeout=RUN_TIMEOUT)
     except subprocess.TimeoutExpired:
-        raise ValueError("%d초 안에 안 끝났다. 기록이 아주 많은 경우다." % RUN_TIMEOUT)
+        raise ValueError(t("Did not finish within %ds — a very large history.",
+                           "%d초 안에 안 끝났다. 기록이 아주 많은 경우다.") % RUN_TIMEOUT)
     out = ANSI.sub("", (p.stdout or "") + (p.stderr or ""))
-    out = out.strip() or "(출력이 없다)"
+    out = out.strip() or t("(no output)", "(출력이 없다)")
     if len(out) > MAX_CHARS:
-        out = out[:MAX_CHARS] + "\n… (잘렸다. 좁은 view 를 골라 다시 부를 것)"
+        out = out[:MAX_CHARS] + t("\n… (truncated — call again with a narrower view)",
+                                  "\n… (잘렸다. 좁은 view 를 골라 다시 부를 것)")
     if p.returncode != 0:
-        raise ValueError("도구가 %d 로 끝났다:\n%s" % (p.returncode, out))
+        raise ValueError(t("The tool exited with %d:\n%s",
+                           "도구가 %d 로 끝났다:\n%s") % (p.returncode, out))
     return out
 
 
@@ -196,8 +211,9 @@ def handle(req):
         reply(mid, {"protocolVersion": ver,
                     "capabilities": {"tools": {"listChanged": False}},
                     "serverInfo": SERVER,
-                    "instructions": "구독 한도와 본전을 재는 도구다. 한도가 왜 닳는지, "
-                                    "채팅이 얼마나 먹는지, 코딩이 무엇을 남겼는지 답한다."})
+                    "instructions": "Measures whether a Claude subscription is paying off, from "
+                                    "local logs: what drives the rate limit, how much of it chat "
+                                    "ate, and what coding actually left behind."})
         return
 
     if method in ("notifications/initialized", "notifications/cancelled"):
@@ -215,7 +231,7 @@ def handle(req):
         name = params.get("name")
         args = params.get("arguments") or {}
         if name not in DISPATCH:
-            reply(mid, error={"code": -32602, "message": "그런 도구가 없다: %s" % name})
+            reply(mid, error={"code": -32602, "message": "Unknown tool: %s" % name})
             return
         try:
             text = run_tool(name, args)
@@ -227,11 +243,11 @@ def handle(req):
         return
 
     if mid is not None:
-        reply(mid, error={"code": -32601, "message": "모르는 메서드: %s" % method})
+        reply(mid, error={"code": -32601, "message": "Unknown method: %s" % method})
 
 
 def main():
-    log("claudeusage MCP 서버 시작 (%s)" % ROOT)
+    log("claudeusage MCP server started (%s)" % ROOT)
     for line in sys.stdin:
         line = line.strip()
         if not line:
@@ -239,15 +255,15 @@ def main():
         try:
             req = json.loads(line)
         except ValueError:
-            log("JSON 이 아닌 줄을 건너뛴다")
+            log("skipping a line that is not JSON")
             continue
         try:
             handle(req)
         except Exception as e:                  # 서버는 무슨 일이 있어도 안 죽는다
-            log("처리 실패: %r" % e)
+            log("failed to handle: %r" % e)
             if isinstance(req, dict) and req.get("id") is not None:
                 reply(req.get("id"), error={"code": -32603, "message": str(e)})
-    log("입력이 닫혔다. 종료.")
+    log("stdin closed, exiting.")
     return 0
 
 

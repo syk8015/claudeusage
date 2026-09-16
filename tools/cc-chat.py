@@ -33,6 +33,10 @@ cc-chat.py — 한도 중에 "클로드코드가 아닌 것"(주로 채팅)이 �
 import os, sys, json, time, importlib.util
 from collections import defaultdict
 
+import os, sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from i18n import t
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 
@@ -59,7 +63,18 @@ def week_of(t):
     return WEEK_ANCHOR + WEEK * ((t - WEEK_ANCHOR) // WEEK)
 
 
-SETUP = """%s한도 게이지 표본이 없다.%s
+SETUP = t("""%sNo limit-gauge samples yet.%s
+
+This tool takes how far the gauge rose, subtracts the share your local logs
+explain, and calls the rest chat. That needs gauge samples first, and Claude Code
+never stores them. A collector has to sit on your status line.
+
+    %s./install.sh%s prints the snippet to paste into settings.json.
+
+Even before samples pile up, these two just work.
+    python3 tools/cc-value.py --all    surviving lines, waste (needs only your chat history)
+    python3 tools/cc-usage.py          live limits + per-product split (asks Anthropic directly)
+""", """%s한도 게이지 표본이 없다.%s
 
 이 도구는 게이지가 오른 양에서 로컬 로그로 설명되는 몫을 빼서 채팅 몫을 낸다.
 그러려면 게이지 표본이 먼저 쌓여야 하는데, 클로드코드는 그 값을 저장하지 않는다.
@@ -70,7 +85,7 @@ SETUP = """%s한도 게이지 표본이 없다.%s
 표본이 쌓이기 전에도 이 둘은 그냥 된다.
     python3 tools/cc-value.py --all    살아남은 줄·낭비 (대화 기록만 있으면 된다)
     python3 tools/cc-usage.py          지금 한도 + 제품별 분해 (앤트로픽에 직접 묻는다)
-""" % (R, X, B, X)
+""") % (R, X, B, X)
 
 
 def need_samples():
@@ -214,8 +229,10 @@ def weights():
             if any(s.get("reqs") and not s.get("offlog") for s in w["steps"])]
     fit = L.run_fit(wagg, "모델별 $")
     if not fit:
-        print("%s가중치를 적합할 표본이 모자란다 (창 %d개).%s" % (Y, len(wagg), X))
-        print("%s며칠 더 쓰면 쌓인다. 그동안은 cc-value.py 와 cc-usage.py 를 쓸 것.%s" % (D, X))
+        print(t("%sNot enough samples to fit the weights (%d windows).%s",
+                "%s가중치를 적합할 표본이 모자란다 (창 %d개).%s") % (Y, len(wagg), X))
+        print(t("%sA few more days of use will do it. Until then, use cc-value.py and cc-usage.py.%s",
+                "%s며칠 더 쓰면 쌓인다. 그동안은 cc-value.py 와 cc-usage.py 를 쓸 것.%s") % (D, X))
         raise SystemExit(1)
     return dict(zip(fit["labels"], fit["b"])), fit
 
@@ -306,35 +323,44 @@ def truth_chat_pct(t):
 # ────────────────────────────────────────────── 4. 출력
 
 def print_sources(info, wins):
-    print("\n%s게이지 표본 소스%s" % (B, X))
-    print("      상태바        %5d개   클로드코드가 떠 있는 동안" % info["bar"])
-    print("      데스크톱 앱    %5d개   그중 %d개는 상태바가 이미 본 창, %d개는 새 구간"
+    print("\n%s%s%s" % (B, t("gauge sample sources", "게이지 표본 소스"), X))
+    print(t("      status line    %5d   while Claude Code is up",
+            "      상태바        %5d개   클로드코드가 떠 있는 동안") % info["bar"])
+    print(t("      desktop app    %5d   %d in windows the status line already saw, %d new stretches",
+            "      데스크톱 앱    %5d개   그중 %d개는 상태바가 이미 본 창, %d개는 새 구간")
           % (info["desk_in"] + info["desk_out"], info["desk_in"], info["desk_out"]))
     known = [w for w in wins if not w["inferred"]]
     inf = [w for w in wins if w["inferred"]]
-    print("\n%s창%s" % (B, X))
-    print("      리셋 시각을 아는 창  %3d개  %s ~ %s"
+    print("\n%s%s%s" % (B, t("windows", "창"), X))
+    print(t("      known reset    %3d  %s ~ %s",
+            "      리셋 시각을 아는 창  %3d개  %s ~ %s")
           % (len(known), L.utc(known[0]["t_first"]) if known else "-",
              L.utc(known[-1]["t_last"]) if known else "-"))
-    print("      되짚은 창           %3d개  %s ~ %s   %s(8월 등, 경계가 거칠다)%s"
+    print(t("      inferred       %3d  %s ~ %s   %s(August etc. — coarse boundaries)%s",
+            "      되짚은 창           %3d개  %s ~ %s   %s(8월 등, 경계가 거칠다)%s")
           % (len(inf), L.utc(inf[0]["t_first"]) if inf else "-",
              L.utc(inf[-1]["t_last"]) if inf else "-", D, X))
     only = [w for w in wins if w["srcs"] == {"desktop"}]
-    print("      데스크톱만 본 창     %3d개  %s(상태바만 보면 안 보이던 구간)%s"
+    print(t("      desktop only   %3d  %s(invisible to the status line alone)%s",
+            "      데스크톱만 본 창     %3d개  %s(상태바만 보면 안 보이던 구간)%s")
           % (len(only), D, X))
 
 
 def print_windows(wins):
-    print("\n%s5시간 창별 — 채팅 몫 추정%s   상승분에서 로컬 로그로 설명되는 몫을 뺀다\n" % (B, X))
-    print("%s창 관측 구간            상승%%p  설명%%p  채팅%%p  요청   API$  소스%s" % (D, X))
+    print("\n%s%s%s   %s\n"
+          % (B, t("per 5-hour window — chat's share, estimated", "5시간 창별 — 채팅 몫 추정"), X,
+             t("the rise minus what local logs explain", "상승분에서 로컬 로그로 설명되는 몫을 뺀다")))
+    print("%s%s%s"
+          % (D, t("window observed  rise%p  expl%p  chat%p  reqs    API$  source",
+                  "창 관측 구간            상승%p  설명%p  채팅%p  요청   API$  소스"), X))
     for w in wins:
         if w["rise"] <= 0:
             continue
         mark = ""
         if w["chat"] >= 5:
-            mark = " %s채팅 의심%s" % (Y, X)
+            mark = " %s%s%s" % (Y, t("chat suspected", "채팅 의심"), X)
         if not w["reqs"] and w["rise"] >= 3:
-            mark = " %s로컬 요청 0%s" % (R, X)
+            mark = " %s%s%s" % (R, t("no local reqs", "로컬 요청 0"), X)
         print("%s→%s %5.0f %7.1f %7.1f %5d %7.2f  %s%s"
               % (L.utc(w["t_first"]), L.utc(w["t_top"], "%H:%M"),
                  w["rise"], w["pred"], w["chat"], w["reqs"], w["cost"],
@@ -356,55 +382,70 @@ def print_weeks(wins, truth):
             a[k] += w[k]
         a["wins"] += 1
 
-    print("\n%s주간 — 채팅이 먹은 한도%s   관측이 온전한 5시간 창만 센다\n" % (B, X))
-    print("%s주 시작(UTC)   창수  상승%%p  설명%%p  채팅%%p  추정 비중   정답(엔드포인트)   뺀 창%s" % (D, X))
+    print("\n%s%s%s   %s\n"
+          % (B, t("weekly — the limit chat ate", "주간 — 채팅이 먹은 한도"), X,
+             t("counts clean 5-hour windows only", "관측이 온전한 5시간 창만 센다")))
+    print("%s%s%s"
+          % (D, t("week start    wins  rise%p  expl%p  chat%p est. share   "
+                  "truth (endpoint)             skipped",
+                  "주 시작(UTC)   창수  상승%p  설명%p  채팅%p  추정 비중   정답(엔드포인트)   뺀 창"), X))
     for wk in sorted(by):
         a = by[wk]
         est = 100.0 * a["chat"] / a["rise"] if a["rise"] else 0.0
-        t = truth.get(wk)
+        tr = truth.get(wk)
         tv = "-"
-        if t:
-            tc = truth_chat_pct(t)
+        if tr:
+            tc = truth_chat_pct(tr)
             if tc is not None:
                 gap = est - tc
                 col = G if abs(gap) <= 5 else Y
-                tv = "%s%.0f%%  (차이 %+.0f%%p)%s" % (col, tc, gap, X)
-        skip = ("%s%d개 %.0f%%p%s" % (D, a["skipped"], a["skip_rise"], X)) if a["skipped"] else ""
+                tv = t("%s%.0f%%  (gap %+.0f%%p)%s",
+                       "%s%.0f%%  (차이 %+.0f%%p)%s") % (col, tc, gap, X)
+        skip = (t("%s%d win %.0f%%p%s", "%s%d개 %.0f%%p%s")
+                % (D, a["skipped"], a["skip_rise"], X)) if a["skipped"] else ""
         print("%s  %4d %7.0f %7.0f %7.0f %9.0f%%   %-28s %s"
               % (L.utc(wk, "%m-%d %H:%MZ"), a["wins"], a["rise"], a["pred"], a["chat"],
                  est, tv, skip))
 
     tot = {k: sum(a[k] for a in by.values()) for k in ("rise", "pred", "chat", "resid")}
     if tot["rise"]:
-        print("\n%s온전한 창 %.0f%%p 중 채팅 몫 추정 %.0f%%p (%.0f%%)%s"
+        print(t("\n%sOf %.0f%%p across clean windows, chat's share is an estimated %.0f%%p (%.0f%%)%s",
+                "\n%s온전한 창 %.0f%%p 중 채팅 몫 추정 %.0f%%p (%.0f%%)%s")
               % (B, tot["rise"], tot["chat"], 100 * tot["chat"] / tot["rise"], X))
-        print("%s창 단위로 0 에서 자르기 전의 잔차 합은 %+.0f%%p — 이만큼이 추정의 편향이다."
-              " 가중치 적합 오차가 19%% 라 창 하나하나는 그만큼 흔들린다.%s"
+        print(t("%sBefore clipping each window at 0, the residuals sum to %+.0f%%p — that is the bias"
+                " of the estimate. The weight fit is 19%% off, so a single window swings that much.%s",
+                "%s창 단위로 0 에서 자르기 전의 잔차 합은 %+.0f%%p — 이만큼이 추정의 편향이다."
+                " 가중치 적합 오차가 19%% 라 창 하나하나는 그만큼 흔들린다.%s")
               % (D, tot["resid"], X))
     pure = [w for w in wins if w["rise"] >= 2 and not w["reqs"]]
     if pure:
-        print("\n%s로컬 요청이 0 인데 게이지가 오른 창 %d개 · %.0f%%p — 추정이 아니라 관측이다%s"
+        print(t("\n%swindows where the gauge rose with zero local requests: %d · %.0f%%p"
+                " — observed, not estimated%s",
+                "\n%s로컬 요청이 0 인데 게이지가 오른 창 %d개 · %.0f%%p — 추정이 아니라 관측이다%s")
               % (B, len(pure), sum(w["rise"] for w in pure), X))
         for w in pure[:8]:
             print("      %s→%s  +%d%%p  %s"
                   % (L.utc(w["t_first"]), L.utc(w["t_top"], "%H:%M"), w["rise"],
                      "+".join(sorted(w["srcs"]))))
     if not truth:
-        print("%s정답 칸이 비어 있다. `python3 tools/cc-usage.py --log` 를 가끔 돌리면 채워진다."
-              " 주간 창이 지나가면 그 주 정답은 다시 못 받는다.%s" % (Y, X))
+        print(t("%sThe truth column is empty. Running `python3 tools/cc-usage.py --log` now and then"
+                " fills it. Once a weekly window passes, that week's truth is gone for good.%s",
+                "%s정답 칸이 비어 있다. `python3 tools/cc-usage.py --log` 를 가끔 돌리면 채워진다."
+                " 주간 창이 지나가면 그 주 정답은 다시 못 받는다.%s") % (Y, X))
 
 
 def main():
     need_samples()
     rows, info = merged_samples()
     if not rows:
-        print("%s게이지 표본이 없다.%s" % (R, X))
+        print("%s%s%s" % (R, t("No gauge samples.", "게이지 표본이 없다."), X))
         return 1
     wins = windows_of(rows)
     wb, fit = weights()
     measure(wins, wb, bar_cost_by_window())
 
-    print("%s표본 %d개 · 창 %d개 · 가중치는 창 %d개로 적합 (R² %.3f, 오차 %.0f%%)%s"
+    print(t("%s%d samples · %d windows · weights fitted on %d windows (R² %.3f, %.0f%% error)%s",
+            "%s표본 %d개 · 창 %d개 · 가중치는 창 %d개로 적합 (R² %.3f, 오차 %.0f%%)%s")
           % (D, len(rows), len(wins), fit["n"], fit["r2"], fit["rel"], X))
     print("%s  %s%s" % (D, " · ".join("%s %.3f%%p/$" % kv for kv in
                                       sorted(wb.items(), key=lambda kv: -kv[1])), X))
@@ -415,7 +456,8 @@ def main():
         print_windows(wins)
     else:
         print_weeks(wins, truth_rows())
-        print("\n%s--windows 창별 · --sources 소스별 커버리지%s" % (D, X))
+        print("\n%s%s%s" % (D, t("--windows per window · --sources source coverage",
+                                 "--windows 창별 · --sources 소스별 커버리지"), X))
     return 0
 
 
