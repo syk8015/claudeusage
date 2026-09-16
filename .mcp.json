@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "claudeusage": {
+      "type": "stdio",
+      "command": "python3",
+      "args": ["tools/mcp-server.py"]
+    }
+  }
+}

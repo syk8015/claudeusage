@@ -1,0 +1,14 @@
+# 한도 표본. 사용량·비용 이력이라 공개 저장소에 올릴 것이 아니다.
+data/ratelimit-log.jsonl
+data/*.jsonl
+
+# 익명화 소금이 여기로 흘러들면 익명성이 깨진다. 원래 자리는 ~/.claude/.cc-value-salt
+.cc-value-salt
+
+# 경쟁 도구 전수조사. 내부 자료이고 실측으로 확인된 오류가 3개 있다(README 끝부분).
+# 공개하면 그 오류까지 우리 주장으로 읽힌다.
+docs/선행조사-리포트.md
+
+__pycache__/
+*.pyc
+.DS_Store
