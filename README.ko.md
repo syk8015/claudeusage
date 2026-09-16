@@ -281,6 +281,25 @@ claude mcp list        # claudeusage … ✔ Connected 이 떠야 한다
 
 스킬(`skills/claudeusage/SKILL.md`)은 **어느 도구를 언제 부를지와 숫자를 어떻게 말할지**를 담는다. 배수를 낼 때 분모를 밝힐 것, "얼마 아꼈다"고 말하지 말 것 같은 이 프로젝트의 규칙이 거기 들어간다.
 
+### 공개해 보니 반쪽이었다 (09-16)
+
+깃허브에 올린 뒤 **임시 폴더에 새로 받아서 돌려 봤다.** 새 사용자 처지가 이랬다.
+
+| 도구 | 상태 |
+|---|---|
+| `cc-value.py` | 된다 (대화 기록만 있으면 됨) |
+| `cc-usage.py` | 된다 (엔드포인트라서) |
+| `cc-limit.py` | 표본이 없어 못 돎 |
+| `cc-chat.py` | **에러 역추적을 뱉고 죽음** |
+
+표본을 쌓는 게 `~/.claude/statusline-command.sh` 인데 **그건 내 개인 파일이라 저장소에 없었다.** 한도 분석은 이 프로젝트의 핵심인데 새 사용자는 아예 못 쓰는 상태로 공개한 셈이다.
+
+그래서 `tools/statusline-sample.py` 를 만들어 넣었다. jq 없이 파이썬만 쓰고, 두 가지로 돈다 — `--print` 면 간단한 상태바를 찍고, 없으면 받은 JSON 을 그대로 흘려보내 기존 상태바 앞에 이어 붙일 수 있다. 무슨 일이 있어도 상태바를 깨뜨리지 않는다(기록 실패는 조용히 넘어간다).
+
+**상태바 설정은 자동으로 안 건다.** `install.sh` 가 붙여넣을 조각만 찍는다. 상태바는 사용자 것이고, 이미 쓰던 걸 우리가 갈아엎으면 안 된다.
+
+교훈: **공개는 "올렸다"가 아니라 "새로 받아서 돌아간다"까지다.**
+
 ### 만들면서 확인한 것
 
 - **모델이 주는 값은 명령줄에 그대로 안 넣는다.** 인자는 enum 으로만 받고, 경로만 값으로 받되 실제 디렉터리인지 확인한 뒤 argv 리스트로 넘긴다(셸을 안 거친다).
@@ -298,6 +317,7 @@ tools/check-limit.py        cc-limit.py 정합성 검사 (고치면 이걸 돌�
 tools/cc-chat.py            채팅이 먹은 한도 (상태바+데스크톱+엔드포인트)
 tools/check-chat.py         cc-chat.py 정합성 검사 (고치면 이걸 돌린다)
 tools/mcp-server.py         위 도구들을 MCP 로 내놓는다 (stdio, 의존성 없음)
+tools/statusline-sample.py  한도 표본 수집기. 새 사용자는 이걸 상태바에 건다
 skills/claudeusage/SKILL.md 클로드코드 스킬 원본 (__REPO__ 는 설치할 때 치환된다)
 install.sh                  스킬 + MCP 서버 설치 (--uninstall 로 되돌린다)
 LICENSE                     MIT
@@ -312,7 +332,7 @@ data/usage-log.jsonl        정밀 한도 표본 (cc-usage.py --log 로 쌓임, 
 `cc-usage.py`가 다루는 것: 맥 로그인 키체인에 있는 클로드코드 자격증명. 토큰은 실행할 때마다 읽어 앤트로픽에만 보내고 화면이나 파일 어디에도 남기지 않는다. 기록에 나가는 건 시각·한도 종류·모델 이름·소진율·리셋 시각 다섯 개뿐이다(금지 목록이 아니라 허용 목록).
 
 밖에 있지만 이 프로젝트 것:
-- `~/.claude/statusline-command.sh` — 한도 표본을 기록. 상태바라 옮길 수 없음
+- `~/.claude/statusline-command.sh` — 내 상태바. 여기서 표본을 기록한다. 공개본은 같은 일을 하는 `tools/statusline-sample.py` 를 쓴다(아래)
 - `~/.claude/.cc-value-salt` — 익명화 소금. **깃에 올리면 익명성이 깨진다.** 일부러 밖에 뒀음
 
 ## 쓰는 법

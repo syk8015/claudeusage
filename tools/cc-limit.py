@@ -648,7 +648,12 @@ def main():
     win_len = 7 * 86400 if weekly else 5 * 3600
 
     if not os.path.exists(log_path):
-        print("%s표본 파일이 없다: %s%s" % (R, log_path, X))
+        print("%s한도 게이지 표본이 없다: %s%s" % (R, log_path, X))
+        print("\n클로드코드는 한도 소진율을 화면에 찍고 버린다. 상태바에 수집기를 걸어야")
+        print("쌓인다. %s./install.sh%s 가 settings.json 에 넣을 조각을 찍어 준다.\n" % (B, X))
+        print("%s표본이 쌓이기 전에도 되는 것:%s" % (D, X))
+        print("%s  python3 tools/cc-value.py --all    살아남은 줄·낭비%s" % (D, X))
+        print("%s  python3 tools/cc-usage.py          지금 한도 + 제품별 분해%s" % (D, X))
         return 1
 
     rows, skip, n_raw = load_samples(log_path, field)

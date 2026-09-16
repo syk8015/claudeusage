@@ -59,6 +59,26 @@ def week_of(t):
     return WEEK_ANCHOR + WEEK * ((t - WEEK_ANCHOR) // WEEK)
 
 
+SETUP = """%s한도 게이지 표본이 없다.%s
+
+이 도구는 게이지가 오른 양에서 로컬 로그로 설명되는 몫을 빼서 채팅 몫을 낸다.
+그러려면 게이지 표본이 먼저 쌓여야 하는데, 클로드코드는 그 값을 저장하지 않는다.
+상태바에 수집기를 걸어야 한다.
+
+    %s./install.sh%s 가 settings.json 에 넣을 조각을 찍어 준다.
+
+표본이 쌓이기 전에도 이 둘은 그냥 된다.
+    python3 tools/cc-value.py --all    살아남은 줄·낭비 (대화 기록만 있으면 된다)
+    python3 tools/cc-usage.py          지금 한도 + 제품별 분해 (앤트로픽에 직접 묻는다)
+""" % (R, X, B, X)
+
+
+def need_samples():
+    if not os.path.exists(L.DEFAULT_LOG):
+        print(SETUP)
+        raise SystemExit(1)
+
+
 # ────────────────────────────────────────────── 1. 게이지 표본 모으기
 
 def desktop_samples():
@@ -194,7 +214,9 @@ def weights():
             if any(s.get("reqs") and not s.get("offlog") for s in w["steps"])]
     fit = L.run_fit(wagg, "모델별 $")
     if not fit:
-        raise SystemExit("%s가중치 적합에 실패했다.%s" % (R, X))
+        print("%s가중치를 적합할 표본이 모자란다 (창 %d개).%s" % (Y, len(wagg), X))
+        print("%s며칠 더 쓰면 쌓인다. 그동안은 cc-value.py 와 cc-usage.py 를 쓸 것.%s" % (D, X))
+        raise SystemExit(1)
     return dict(zip(fit["labels"], fit["b"])), fit
 
 
@@ -373,6 +395,7 @@ def print_weeks(wins, truth):
 
 
 def main():
+    need_samples()
     rows, info = merged_samples()
     if not rows:
         print("%s게이지 표본이 없다.%s" % (R, X))

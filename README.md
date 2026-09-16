@@ -41,6 +41,27 @@ claude mcp list       # claudeusage … ✔ Connected
 
 `./install.sh --uninstall` reverses it. The installer writes the repo's real path into the installed skill, so the checkout can live anywhere.
 
+### One more step for the limit tools
+
+Claude Code shows your limit gauge and throws it away — nothing stores it. `cc-limit.py` and `cc-chat.py` need that history, so a collector has to sit on your status line. Add this to `~/.claude/settings.json`:
+
+```json
+"statusLine": {
+  "type": "command",
+  "command": "python3 /path/to/claudeusage/tools/statusline-sample.py --print"
+}
+```
+
+Already have a status line you like? Drop `--print` and pipe into it — the collector passes the JSON straight through:
+
+```json
+"command": "python3 /path/to/claudeusage/tools/statusline-sample.py | bash ~/.claude/my-statusline.sh"
+```
+
+`install.sh` prints this snippet with your real path filled in. It does not edit your settings — your status line is yours.
+
+**`cc-value.py` and `cc-usage.py` work right away**, with no collector. The limit analysis gets useful after a few days of samples.
+
 ## Use it from Claude
 
 Ask in plain language — "am I getting my money's worth?", "why is my limit draining so fast?", "how much of my limit did chat eat?" The skill picks the right tool.
@@ -69,7 +90,7 @@ Three sources, each blind in a different way, so they are merged:
 
 | Source | Gives | Blind when |
 | --- | --- | --- |
-| Status line samples | Gauge readings with reset times | Claude Code isn't running |
+| Status line samples (`tools/statusline-sample.py`) | Gauge readings with reset times | Claude Code isn't running |
 | Claude desktop app history | Gauge readings every 15 min | The app isn't running |
 | OAuth usage endpoint | **Per-product truth** (Claude Code / chat / Cowork) | Only the current weekly window |
 
