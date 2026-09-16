@@ -257,12 +257,16 @@ Claude Code 92% · Chats 8% · Cowork 0% · Other 0%
 ### 설치
 
 ```bash
-claude mcp add --scope user --transport stdio claudeusage -- python3 ~/Desktop/claudeusage/tools/mcp-server.py
-mkdir -p ~/.claude/skills/claudeusage && cp skills/claudeusage/SKILL.md ~/.claude/skills/claudeusage/
+./install.sh           # 스킬 + MCP 서버. 여러 번 돌려도 안전하다
 claude mcp list        # claudeusage … ✔ Connected 이 떠야 한다
+./install.sh --uninstall
 ```
 
-사용자 수준(`--scope user`)으로 넣는다. 이 도구는 `~/.claude` 를 읽으므로 **어느 프로젝트에서 물어도 답해야** 값을 한다. 프로젝트 안에서만 쓰려면 저장소의 `.mcp.json` 이 그 역할을 한다.
+사용자 수준으로 넣는다. 이 도구는 `~/.claude` 를 읽으므로 **어느 프로젝트에서 물어도 답해야** 값을 한다.
+
+저장소를 어디에 두든 되게, 설치할 때 실제 경로를 스킬 파일에 박아 넣는다(`__REPO__` 를 치환). 그래서 스킬 원본은 저장소에 두고 **설치본은 `~/.claude/skills/claudeusage/` 에 따로 생긴다.** 원본을 고치면 `./install.sh` 를 다시 돌려야 반영된다.
+
+프로젝트용 `.mcp.json` 은 일부러 저장소에서 뺐다. 사용자 수준과 같이 있으면 클로드코드가 "같은 서버가 두 곳에 정의됨" 경고를 낸다.
 
 ### 내놓는 도구 넷
 
@@ -292,8 +296,9 @@ tools/check-limit.py        cc-limit.py 정합성 검사 (고치면 이걸 돌�
 tools/cc-chat.py            채팅이 먹은 한도 (상태바+데스크톱+엔드포인트)
 tools/check-chat.py         cc-chat.py 정합성 검사 (고치면 이걸 돌린다)
 tools/mcp-server.py         위 도구들을 MCP 로 내놓는다 (stdio, 의존성 없음)
-skills/claudeusage/SKILL.md 클로드코드 스킬 원본 (~/.claude/skills 로 복사해 설치)
-.mcp.json                   프로젝트 안에서 쓸 때의 서버 등록
+skills/claudeusage/SKILL.md 클로드코드 스킬 원본 (__REPO__ 는 설치할 때 치환된다)
+install.sh                  스킬 + MCP 서버 설치 (--uninstall 로 되돌린다)
+LICENSE                     MIT
 tools/cc-usage.py           앤트로픽에서 정밀 한도값 받아오기 (9/15 첫 실행)
 tools/cc-cost.sh            초기 비용 계산기 (bash, cc-value.py 가 대체)
 tools/verify_reconstruct.py originalFile 이 온전한지 검증한 스크립트

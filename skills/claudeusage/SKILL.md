@@ -31,12 +31,12 @@ Claude 구독료를 제대로 뽑고 있는지 로컬 기록으로 재는 도구
 MCP 서버(`claudeusage`)가 붙어 있으면 그 도구들을 부른다. 없으면 같은 것을 CLI 로 돌린다.
 
 ```bash
-python3 ~/Desktop/claudeusage/tools/cc-usage.py          # 지금 한도 + 제품별 분해
-python3 ~/Desktop/claudeusage/tools/cc-limit.py          # 창별 한도 소진
-python3 ~/Desktop/claudeusage/tools/cc-limit.py --fit    # 한도 가중치·모델 배율
-python3 ~/Desktop/claudeusage/tools/cc-chat.py           # 채팅이 먹은 한도
-python3 ~/Desktop/claudeusage/tools/cc-value.py --all    # 살아남은 줄·비용
-python3 ~/Desktop/claudeusage/tools/cc-value.py --project <경로> --waste
+python3 __REPO__/tools/cc-usage.py          # 지금 한도 + 제품별 분해
+python3 __REPO__/tools/cc-limit.py          # 창별 한도 소진
+python3 __REPO__/tools/cc-limit.py --fit    # 한도 가중치·모델 배율
+python3 __REPO__/tools/cc-chat.py           # 채팅이 먹은 한도
+python3 __REPO__/tools/cc-value.py --all    # 살아남은 줄·비용
+python3 __REPO__/tools/cc-value.py --project <경로> --waste
 ```
 
 ## 숫자를 읽어 줄 때 지킬 것
