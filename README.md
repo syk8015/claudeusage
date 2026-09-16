@@ -1,434 +1,98 @@
 # claudeusage
 
-AI 구독료를 제대로 뽑고 있는지 재주는 서비스. 지금은 **엔진만 만든 상태**다.
+Measure whether your Claude subscription is actually paying off — from local logs, with no upload and no Git integration.
 
-원래 "피부 셀프 케어 어플" 폴더에서 급하게 시작했다가 2026-09-01에 여기로 옮겼다.
+*[한국어 문서: README.ko.md](README.ko.md) — the Korean version is the working notebook, with the full measurements and the mistakes we made getting there.*
 
-> **다음 세션은 여기서 시작한다.**
-> 1. 채팅 통합(`cc-chat.py`)과 **MCP 서버 + 스킬 포장까지 완료**(2026-09-16). 다음 할 일은 **레지스트리 등록**(mcp.so, smithery.ai, glama.ai). 순서는 [제품 방향](#제품-방향-사람이-아니라-ai를-노린다) 절.
-> 2. 껍데기는 웹사이트가 아니라 **MCP 서버 + 클로드코드 스킬**이다. 이 도구는 로컬 로그를 읽으므로 데이터가 있는 자리에서 도는 게 자연스럽다.
-> 3. 한도 분석은 2026-09-15에 재분석했다(창 55개). 새로 나온 것: **한도의 10%는 로컬 로그 밖(채팅·앱)에서 먹었다.** 채팅 통합이 필요한 실측 근거다. 상태바 수집기는 계속 쌓으니 가끔 `--fit` 만 다시 돌리면 된다.
+## Why this exists
 
----
+On a subscription you don't pay per token, so nothing tells you whether you are using it well. Existing personal tools count **how much** you used. That is the wrong number: burning tokens in circles scores high. Meta ran an internal leaderboard like that and shut it down — people started idling AI to climb it.
 
-## 왜 만드나
+Tools that measure quality do exist, but they are all built for teams: they need your Git repo, your PRs, your issue tracker. That leaves a gap.
 
-구독을 쓰면 토큰당 돈을 안 낸다. 그래서 잘 쓰는지 못 쓰는지 알 방법이 없다.
+|  | Team tools | claudeusage |
+| --- | --- | --- |
+| Who is measured | A lead measures the team | You measure yourself |
+| Needs | Git repo, PRs, tracker | One local log directory |
+| Measures | Return on team investment | Whether your subscription pays off |
+| Price | SaaS or self-hosted | Free, runs locally |
 
-개인용 도구들(ccusage 스타 1.8만, viberank, tokscale)은 전부 **"얼마나 많이 썼나"**만 잰다. Meta가 사내에서 그런 순위를 만들었다가 사람들이 점수 올리려고 AI를 공회전시켜서 닫았다(Claudeonomics).
+Git-based tools track code with `git blame`, so anything you never committed is invisible to them. This reconstructs the edit history itself, so experiments and code you rewrote before committing still count.
 
-### "잘 썼나"는 비어 있지 않다 (2026-09-04 정정)
+## What it measures
 
-처음에 "우리는 잘 썼나를 잰다, 거기가 비어 있다"고 적었는데 **틀렸다.** 검색해 보니 이미 있다.
+**Lines that survived.** Every edit is folded in time order, so only what was still there at the end of the session counts. Code you rewrote three turns later drops out by itself. You cannot game the score by idling.
 
-- **Git AI** — AI 코드의 생존율을 잰다. "AI 코드의 65%가 커밋 전에 버려지고, 머지된 코드의 58%가 30일 안에 갈아엎힌다."
-- **minware** — 토큰 지출을 생산적·비효율·낭비로 나눈다. 우리 W3과 같은 발상.
-- **Faros.ai, Jellyfish** — 토큰 지출을 배포 성과에 연결.
-- **앤트로픽 공식 Claude Code Analytics API** — 조직 단위 집계.
+**Waste, in money.** Rework, failures and rejections add up to 4.1% here. Money spent because conversations got long: **12.3%**. So the useful advice is not "make fewer mistakes" — it's **"start fresh conversations more often."**
 
-### 그래서 진짜 빈칸은 어디인가
+**What the rate limit actually eats.** Your real constraint is the limit gauge, not dollars. Cache reads are most of the cost but weigh about 1/70 of fresh input against the limit. **Saving money and saving limit are different skills.**
 
-저것들은 **전부 팀·회사용**이다. 여기가 갈린다.
+**What chat ate.** Limits apply to the whole account, so claude.ai chat and the mobile app drain the same gauge — while leaving no local trace. Any log-only tool undercounts. This one subtracts what the logs explain from what the gauge actually did, and checks that estimate against the per-product breakdown Anthropic returns.
 
-| | 저쪽 | 우리 |
-|---|---|---|
-| 대상 | 엔지니어링 리더가 팀을 잰다 | 개인이 자기를 잰다 |
-| 필요한 것 | Git 저장소·PR·이슈 트래커 연동 | 로컬 로그 파일 하나 |
-| 재는 것 | 팀의 투자 대비 성과 | 내 구독료 본전 |
-| 값 | 유료 SaaS 또는 자체 호스팅 | 무료 |
+## Install
 
-Git AI는 `git blame`으로 추적한다. **커밋을 안 하면 안 보인다.** 개인 실험이나 커밋 전에 갈아엎은 것은 못 센다. 우리는 편집 기록 자체를 복원하므로 커밋 없이도 센다.
-
-남는 차별점은 셋이다. 순서대로 확실하다.
-
-1. **한도를 쪼갠다.** 지금 도구들은 토큰을 달러로 바꾸거나(ccusage) 지금 몇 % 남았는지 보여 준다(Claude Monitor, Vibe Island, CodexBar). **한도가 무엇 때문에 오르는지 분해한 건 못 찾았다.** 구독자의 진짜 제약은 달러가 아니라 게이지인데 아무도 그 구조를 안 건드린다. 우리가 낸 것: 캐시 읽기는 비용의 대부분인데 한도 무게는 신규입력의 1/70이다. **돈 아끼는 요령과 한도 아끼는 요령이 다르다.**
-2. **개인이면서 품질을 잰다.** 개인용은 양만 재고, 품질을 재는 쪽은 전부 팀용에 Git 연동이 필요하다. 그 사이 칸이 비어 있다.
-3. **코딩과 순수 채팅을 한 계정으로 합친다.** 선행 리포트가 "진짜 미개척"으로 꼽았고 지금도 유효하다. **1차 구현했다** — 아래 "채팅까지 합쳐 재기" 절.
-
-### 인정할 것
-
-이 바닥은 도구가 우후죽순이다. 리포트가 센 것만 30개가 넘고 대부분 ccusage 출력에 얹혀 있다. **파싱 자체는 해자가 아니다.** 우리 파싱이 나은 건 함정 14개를 실측으로 잡았다는 점인데, 그건 진입장벽이지 제품이 아니다. 한국어도 번역으로 따라잡힌다.
-
-## 핵심 발견 세 가지
-
-셋 다 실제 데이터를 돌려서 나온 것이고, 조사 리포트에는 없다. 다만 **"우리 리포트에 없다"가 "공개돼 있지 않다"는 뜻은 아니다.** 한도 모델 배율에서 그걸로 한 번 헛짚었다(아래 참고).
-
-**1. "본전율"은 tokenmaxxing을 못 막는다**
-
-리포트가 제안한 지표는 `API환산가 ÷ 구독료`다. 그런데 같은 요금제 안에서 구독료는 상수라, 상수로 나누면 순위가 안 바뀐다. 토큰 많이 쓴 사람 순위와 **수학적으로 동일**하다.
-
-**2. API환산가는 반사실이 틀렸다**
-
-"$528 아꼈다"가 아니라 "돈 내면서도 똑같이 헤프게 썼다면 나왔을 돈"이다. 종량제였다면 압축하고, 싼 모델 쓰고, 짧게 끊었을 것이다. 구조적으로 본전을 부풀린다.
-
-**3. 돈의 99%는 "같은 대화 다시 읽기"다**
-
-AI는 답할 때마다 그때까지의 대화를 통째로 다시 읽는다. 캐시 읽기가 전체 입력 토큰의 98.8%, 비용의 대부분. 그래서 저 지표가 실제로 재는 건 **"대화를 얼마나 길게 끌었나"**다. 짧고 굵게 끝내는 사람이 지는 구조.
-
-## 그래서 재는 것
-
-**끝까지 살아남은 줄.** 편집 기록을 시간순으로 접어서 세션이 끝났을 때 실제로 남은 것만 센다. 3턴 뒤에 갈아엎은 코드는 자동으로 빠진다. 공회전으로 점수를 못 올린다.
-
----
-
-## 지금까지 한 것
-
-| | 상태 | 결과 |
-|---|---|---|
-| W1 살아남은 줄 | 완료 | 1만 줄 삭제로 1등이던 세션이 10등으로. 편집의 68%만 생존 |
-| W3 낭비를 돈으로 | 완료 | 재작업·실패·거부 다 합쳐 4.1%, **컨텍스트 비대 12.3%** |
-| W2 활동별 비용 분해 | 완료 | 효율 편차 8.4배 → 4.7배 |
-| W4 유출 방지 | 완료 | 153MB → 8.6KB, 유출 검사 12/12 |
-| 한도 정체 규명 | 완료 | 공식 안내 "Fable은 Opus보다 약 2배"를 실측으로 검증(출력 토큰당 약 4배)하고 **토큰 종류별로 쪼갬** |
-| 한도 재분석 | 완료 (09-15) | 창 13 → 55개. **로그 밖 소비 10% 발견**, 빼고 나니 적합 R² 0.83 → 0.95 |
-| 채팅 통합 1차 | 완료 (09-16) | 엔드포인트에 **제품별 정답**이 있었다. 추정기와 대조까지 |
-
-### W3이 제품에 주는 답
-
-눈에 띄는 낭비(재작업·실패·거부)는 4.1%뿐이다. 대화가 길어져서 나가는 돈이 그 **3배**.
-
-재작업률은 32%인데 재작업 *비용*은 1.3%다. 모순 같지만 둘 다 맞다 — 코드 고치는 건 원래 싸고, 돈은 대화 재읽기에서 나간다.
-
-> 틀린 조언: "실수를 줄이세요" → 4.1% 절약
-> 맞는 조언: "대화를 자주 끊으세요" → 12.3% 절약
-
-숫자는 `--all` 기준이고 기록이 쌓이면 움직인다. 2026-09-01엔 4.3% 대 17.7%였다. 뒤집힌 적은 없다.
-
-### W2에서 방향을 바꾼 이유
-
-세션에 이름표(코딩/조사/운영)를 붙이려 했는데 **실데이터가 거의 다 섞여 있었다.** 한 세션에서 코드 짜고 → 브라우저로 확인하고 → 고치는 걸 다 한다.
-
-그래서 이름표 대신 **돈이 어느 활동으로 갔는지 쪼갰다.** Bash를 명령어로 재분류한 게 결정적이었다(28%는 사실상 읽기, 23%는 빌드·테스트·git).
-
----
-
-## 한도에서 나온 답
-
-### 먼저, 이미 공개된 것부터 (2026-09-04 확인)
-
-처음에 "모델마다 한도 배율이 다르다"를 우리 발견인 줄 알았다. **아니다. 이미 나와 있다.**
-
-- 클로드코드 모델 선택 화면에 이렇게 떠 있다. **"Uses your limits ~2x faster than Opus."**
-- 앤트로픽 공식 도움말은 숫자를 안 쓴다. "다른 모델보다 빨리 씁니다"까지만. **약 2배는 문서가 아니라 제품 화면 문구다.**
-- Max 요금제는 **주간 한도의 50%까지만** Fable에 쓸 수 있다. 넘으면 크레딧을 사거나 다른 모델로 가야 한다.
-
-흔히 도는 **3.5배는 모델 얘기가 아니다.** Max 5x 요금제가 광고와 달리 Pro의 3.5배쯤이고 그나마 5시간 창에만 적용된다는 논란이고, 2026-06 집단소송까지 갔다. 모델 배율과 섞으면 안 된다.
-
-그래서 아래는 **발견이 아니라 검증이고, 공식 수치의 해상도를 높인 것**이다.
-
-### 실측 (2026-09-15 재분석: 5시간 창 55개, 변화점 1191개, 1636%p)
-
-9/4에는 창 13개·변화점 306개였다. 아래 숫자는 `cc-limit.py --fit` 이 직접 내는 "배율" 표이고, 로그 밖 소비(5절)는 뺀 값이다.
-
-**1. 공식 "약 2배"는 방향은 맞다. 실측은 그보다 크다**
-
-Opus 5를 1로 놓고, 한도 1%p를 올리는 데 필요한 양의 역수다. 클수록 빨리 닳는다.
-
-| | 출력 토큰 | 신규입력 | 캐시읽기 | 순수 창 | 9/4 값 (출력) |
-|---|---|---|---|---|---|
-| Fable 5.1 | 3.9배 | 3.2배 | 8.6배 | 5개 | 2.9배 (3개) |
-| Fable 5 | 4.4배 | 2.7배 | 3.8배 | 7개 | 3.6배 |
-| Opus 4.8 | 1.7배 | 1.6배 | 4.6배 | 4개 | 없음 |
-
-출력·신규입력은 공식 안내 2배보다 크다(3~4배). **캐시읽기만 유독 크다**는 9/4 결론은 그대로다. Fable 5.1은 창이 5개뿐이라 출력 배율이 2.6~3.9배 사이에서 아직 흔들린다. 지난 열흘은 거의 Opus 5만 써서 Fable 표본은 거의 늘지 않았다.
-
-Opus 4.8이 Opus 5보다 1.6배쯤 빨리 닳는다는 건 새로 나온 것이다. 창 4개라 방향만 본다.
-
-**2. 달러 기준 배수는 쓰면 안 된다**
-
-같은 데이터를 달러로 재면 Fable 5.1이 4.8배로 나온다. 이건 모델 탓이 아니라 **세션 스타일 탓**이다. Opus로 돌린 세션들이 유독 긴 대화라, 1%p 올리는 동안 캐시 읽기가 250만 토큰 들어갔고 그게 비용의 65%다. Fable 5.1 세션은 34만 토큰에 42%다.
-
-캐시읽기는 싸지만 양이 압도적이라 달러를 지배한다. 그래서 달러 기준 배수는 모델 가중치가 아니라 "그 모델을 어떻게 썼는가"를 같이 잰다. **모델 자체를 재려면 토큰당으로 봐야 한다.** 처음에 이걸 헤드라인으로 올렸다가 틀렸다.
-
-**3. 돈과 한도는 다른 것을 센다 (이건 공개된 자료에서 못 찾았다)**
-
-캐시 읽기가 토큰의 97.5%이고 비용의 대부분이다. 그런데 한도에서는 토큰 하나당 무게가 신규입력의 1/70쯤이다. 개수가 60배가 넘어서 기여는 비슷해진다.
-
-> 돈은 캐시 읽기가 거의 다 먹는다. 한도는 출력·신규입력·캐시읽기가 나눠 먹는다.
-
-교차 모델로 회귀를 돌리면 캐시읽기 계수가 음수로 나온다. 모델 효과에 가린 착시라 한 모델 안에서 봐야 한다.
-
-**4. 메시지 개수만으로는 설명이 안 된다**
-
-요청 1건 = 0.108%p, 즉 100%에 약 930건(9/4엔 0.124%p·800건). 공식의 "최소 225 메시지"와 모순되진 않는다("최소"니까). 하지만 요청 수 가설은 창 단위 R² 0.80으로, 모델별 달러 가설 0.95보다 확실히 못하다.
-
-**5. 한도의 10%는 로그 밖에서 먹었다 (2026-09-15)**
-
-전체 1636%p 중 169%p는 게이지가 크게 뛰었는데 그 사이 로컬 요청이 거의 없었다. 판정 기준은 **Δ5%p 이상인데 1%p당 $0.3 미만**이다. 평소 Opus 5는 1%p당 $2 안팎이다.
-
-- 대부분 **9/14(월) 한국시간 11:40~15:20**에 몰렸다. 15→53%(+38)가 18분 동안 로컬 요청 8건, $1.75였다. 그 5시간 창은 111%까지 찼다(표본 전체에서 유일한 100% 초과).
-- 그 시각 로컬 기록엔 평범한 Bash·Read·Edit뿐이었다. Workflow·원격 에이전트·`claude -p`·fast 모드 없음. 상태바를 찍은 세션도 기록 파일이 다 있다.
-- **사용자 확인: 그 시간에 claude.ai 채팅/앱을 썼다.** 채팅이 같은 5시간 한도를 먹는다는 실측이다.
-- 이걸 빼자 적합이 확 좋아졌다. 모델별 $ 가설 창 R² 0.825 → 0.952, Opus 5 한 모델 안에서 0.829 → 0.976. 오염이 맞았다는 방증이다.
-
-뜻하는 바:
-- 클로드코드 로그만 읽는 도구(ccusage 포함, 우리 것도)는 **구독 한도를 구조적으로 덜 센다.** 채팅을 많이 쓰는 날일수록 더 틀린다.
-- 거꾸로, 한도 게이지와 로컬 로그의 차이가 **채팅 사용량의 추정치**가 된다. 채팅 기록을 못 읽어도 채팅이 한도를 얼마나 먹는지는 이 차이로 잴 수 있다. 채팅 통합의 첫 발판.
-- 작은 점프(+5~7%p, 몇 초짜리) 몇 개는 9/14 말고도 있다. 정수 눈금과 오래된 스냅샷 탓일 수도 있어 원인은 확인 안 했다.
-
-### 아직 못 하는 것
-
-- 한도값이 **정수 %**라 변화점 하나하나는 거칠다. 답은 1191개의 평균이다.
-- Fable 5.1 은 순수 창이 5개뿐이라 배율이 아직 흔들린다. 출력 기준 2.9배(9/4) → 3.9배(9/15). Fable을 써야 늘어난다.
-- 주간 창은 3개(깨끗한 건 1개)라 `--weekly`는 참고용이다. 주간 1%p당 API환산 $12~19.
-- **Fable 주간 상한은 이제 보인다.** 9/15 `cc-usage.py`에서 `weekly_scoped(Fable)` 33%(전체 주간 84%). 9/4엔 0이었다. 이번 주 Fable을 거의 안 썼는데 33%라는 게 이상하다 — 주간 창 초반(9/8~9/9)에 쓴 몫이거나 계산 방식이 다른 것. 표본 1개라 아직 모른다.
-- 로그 밖 소비 판정 기준(Δ5%p, $0.3)은 9/14 한 사례로 정했다. 채팅을 조금씩 쓰면 1%p씩 섞여 들어가 못 잡는다.
-- 모델별 주간 한도는 상태바 payload에 없다. 앤트로픽 OAuth usage 엔드포인트에는 있다.
-
-### 엔드포인트를 불러 봤더니 (2026-09-04, 예상이 빗나감)
-
-"상태바는 정수라 거치니 원본을 부르면 더 정밀할 것"이라고 보고 `tools/cc-usage.py`를 만들었다. **틀렸다.**
-
-- `five_hour.utilization`은 타입이 실수인데 값은 `26.0`이었다. `limits[].percent`는 아예 정수다.
-- 같은 시각 상태바도 26~27을 보이고 있었다. **두 소스가 같은 숫자를 준다.**
-- 상태바 표본 5,537개를 다 훑어도 정수 아닌 값이 하나도 없다. `28.000000000000004`는 28의 부동소수 찌꺼기지 소수점이 아니다.
-
-**1%가 양쪽 다 바닥이다.** 그러니 한도 분석을 날카롭게 하려면 더 고운 눈금이 아니라 **더 긴 기간**이 필요하다.
-
-그래도 엔드포인트가 주는 게 둘 있다.
-1. `group: "scoped"` 항목 — 모델별 주간 한도. 상태바에는 없다.
-2. 세션별 낡은 스냅샷이 안 섞인 **한 번의 깨끗한 읽기**. 상태바는 세션마다 자기 마지막 값을 들고 있어 톱니가 생긴다.
-
-응답에는 `nimbus_quill`, `tangelo`, `juniper_tide` 같은 뜻 모를 이름의 한도 칸도 있다. 거의 다 `null`이다. 이름을 미리 정해 두면 새 게 생겼을 때 놓치므로 `utilization`을 가진 칸은 전부 담게 해 뒀다.
-
----
-
-## 채팅까지 합쳐 재기 (2026-09-16)
-
-구독 한도는 계정 전체에 걸린다. 그런데 로컬에는 클로드코드 기록만 남으므로, 로그만 읽는 도구는 **구독 소진을 구조적으로 덜 센다.** 채팅을 많이 쓰는 날일수록 더 틀린다.
-
-### 정답이 이미 있었다
-
-`api.anthropic.com/api/oauth/usage` 응답에 **`seven_day_breakdown`** 이 있다. 추정할 필요가 없다.
-
-```
-창 시작 09-15 15:00Z
-Claude Code 92% · Chats 8% · Cowork 0% · Other 0%
-```
-
-`cc-usage.py` 가 이걸 보여주고 `--log` 로 쌓는다. **주간 창 하나치만 오고 지나가면 사라지므로** 가끔 돌려 둬야 한다. 응답에는 `session`·`weekly_all`·`weekly_scoped(Fable)` 한도도 같이 온다.
-
-이 발견은 9/15에 로그로 추정한 "로그 밖 소비 10%"와 맞는다. **추정기가 맞았다는 채점이 됐다.**
-
-### 그래도 추정기가 필요한 이유
-
-정답은 주 단위이고 정수이며 지나간 주는 못 받는다. 언제·어느 5시간 창에서 채팅을 썼는지는 안 알려준다. 그래서 `cc-chat.py` 는 뺄셈으로 시간대별 추정을 낸다.
-
-> 채팅 몫 = 게이지가 실제로 오른 양 − 로컬 로그로 설명되는 양
-
-설명되는 양은 `cc-limit.py` 가 적합한 모델별 가중치(%p/$)로 계산한다. **로그 밖 소비를 뺀 창으로만 적합**하므로 순환논리가 아니다. 안 그러면 채팅 몫이 로컬 비용에 얹혀 가중치가 부풀고, 추정기가 스스로를 못 본다.
-
-### 세 번째 소스: 데스크톱 앱
-
-`~/Library/Application Support/Claude/plan-usage-history.json` 에 5시간·주간 소진율이 **15분 간격**으로 쌓여 있다(8/17~, 702개). 우리 상태바 수집기는 9/1부터라 2주를 더 얻고, 무엇보다 **클로드코드를 안 켠 시간대**를 덮는다. 채팅만 쓴 창은 상태바에 아예 안 잡힌다.
-
-병합 규칙은 **"더하기만 한다"** 이다. 겹치는 창 43개에서 최댓값이 같은 건 11개뿐이었는데, 어긋나는 쪽은 대부분 앱이 잠깐 켜져 있어 데스크톱이 낮게 본 경우다(23 대 7). 반대로 데스크톱이 1%p 더 높게 본 창도 5개 있었다. 그래서 두 소스를 합쳐 창 안에서 누적 최대로 읽는다.
-
-### 결과
-
-| 주 시작(UTC) | 온전한 창 | 상승%p | 설명%p | 채팅%p | 추정 | 정답 |
-|---|---|---|---|---|---|---|
-| 09-01 15:00Z | 22 | 680 | 763 | 35 | 5% | - |
-| 09-08 15:00Z | 29 | 906 | 783 | 215 | 24% | - |
-| 09-15 15:00Z | 2 | 25 | 25 | 1 | 3% | **8%** |
-
-9/14 두 창에서 채팅 몫이 80%p·69%p로 나온다. 사용자가 그 시간에 채팅을 썼다고 확인한 바로 그 창이다. 09-08 주가 24%로 높은 건 그 때문이다.
-
-### 함정 둘 (실측)
-
-1. **관측이 반쪽인 창은 뺄셈이 통째로 기운다.** 8월은 리셋 시각이 없어 창을 되짚어야 하는데, 앱이 켜진 토막만 보이니 상승분은 낮게 설명분은 높게 나온다(상승 6%p인데 설명 38.6%p인 창도 있었다). 게다가 음수를 0으로 자르면 양수만 남아 채팅이 부푼다 — 처음 돌렸을 때 8월 첫 주가 59%로 나왔다. 그래서 **리셋 시각을 알고 0부터 본 창만** 합계에 넣는다(107개 중 55개).
-2. **로그 기반 비용은 6~9% 적게 잡힌다**(함정 7). 그대로 두면 차액이 전부 채팅으로 넘어간다. 창별로 상태바 누계와 대조해 되돌린다. 이 보정 하나로 잔차 합이 +235%p → +35%p 로 줄었다.
-
-`python3 tools/check-chat.py` 가 위 둘과 9/14 앵커를 포함해 15가지를 검사한다.
-
-### 아직 절반이다
-
-원래 "채팅 통합"은 **타사까지** 합치는 계획이었다(ChatGPT `conversations.json`, Gemini Takeout 을 받아 클라이언트에서 토큰 추정). 이번에 한 건 **Claude 계정 안의 채팅 몫**이다. 타사는 아직이고, 그쪽은 성격이 다르다 — 한도가 아니라 남의 구독료 얘기라 지표부터 다시 정해야 한다.
-
-지금 것의 한계도 남아 있다.
-- 정답 표본이 1주치뿐이다. 추정 3% 대 정답 8%는 온전한 창 2개로 낸 값이라 아직 채점이라 부르기 어렵다. `cc-usage.py --log` 를 주마다 돌려 쌓아야 한다.
-- 8월은 되짚은 창이라 합계에서 빠진다(107개 중 52개). 데스크톱 앱이 계속 떠 있지 않으면 이 구멍은 안 메워진다.
-- Cowork·Other 칸은 아직 0이라 뜻을 못 봤다.
-
-## 포장: MCP 서버 + 스킬 (2026-09-16)
-
-웹사이트로 만들면 사용자가 수백 MB 를 업로드해야 한다. MCP 서버로 만들면 **데이터가 있는 자리에서 그대로 돈다.** 새 분석 로직은 없다. 기존 CLI 를 그대로 감싼다.
-
-### 설치
+Requires Python 3 (standard library only, no dependencies), the `claude` CLI, and macOS for the live-limit tool.
 
 ```bash
-./install.sh           # 스킬 + MCP 서버. 여러 번 돌려도 안전하다
-claude mcp list        # claudeusage … ✔ Connected 이 떠야 한다
-./install.sh --uninstall
+git clone <this repo> && cd claudeusage
+./install.sh          # installs the skill + registers the MCP server (user scope)
+claude mcp list       # claudeusage … ✔ Connected
 ```
 
-사용자 수준으로 넣는다. 이 도구는 `~/.claude` 를 읽으므로 **어느 프로젝트에서 물어도 답해야** 값을 한다.
+`./install.sh --uninstall` reverses it. The installer writes the repo's real path into the installed skill, so the checkout can live anywhere.
 
-저장소를 어디에 두든 되게, 설치할 때 실제 경로를 스킬 파일에 박아 넣는다(`__REPO__` 를 치환). 그래서 스킬 원본은 저장소에 두고 **설치본은 `~/.claude/skills/claudeusage/` 에 따로 생긴다.** 원본을 고치면 `./install.sh` 를 다시 돌려야 반영된다.
+## Use it from Claude
 
-프로젝트용 `.mcp.json` 은 일부러 저장소에서 뺐다. 사용자 수준과 같이 있으면 클로드코드가 "같은 서버가 두 곳에 정의됨" 경고를 낸다.
+Ask in plain language — "am I getting my money's worth?", "why is my limit draining so fast?", "how much of my limit did chat eat?" The skill picks the right tool.
 
-### 내놓는 도구 넷
+| MCP tool | What it answers |
+| --- | --- |
+| `subscription_value` | Lines that survived, waste, cost by activity |
+| `limit_breakdown` | What drives the 5-hour and weekly limits |
+| `chat_share` | How much of the limit chat ate |
+| `current_limits` | Limits right now, plus the per-product breakdown |
 
-| 도구 | 하는 일 |
-|---|---|
-| `subscription_value` | 살아남은 줄·낭비·활동별 비용 (view: summary/waste/mix/files) |
-| `limit_breakdown` | 한도가 뭘 먹고 오르는지 (view: windows/fit/steps/weekly) |
-| `chat_share` | 채팅이 먹은 한도 (view: weeks/windows/sources) |
-| `current_limits` | 지금 한도 + 제품별 분해. `record=true` 면 표본 한 줄 기록 |
-
-스킬(`skills/claudeusage/SKILL.md`)은 **어느 도구를 언제 부를지와 숫자를 어떻게 말할지**를 담는다. 배수를 낼 때 분모를 밝힐 것, "얼마 아꼈다"고 말하지 말 것 같은 이 프로젝트의 규칙이 거기 들어간다.
-
-### 만들면서 확인한 것
-
-- **모델이 주는 값은 명령줄에 그대로 안 넣는다.** 인자는 enum 으로만 받고, 경로만 값으로 받되 실제 디렉터리인지 확인한 뒤 argv 리스트로 넘긴다(셸을 안 거친다).
-- **stdout 은 JSON-RPC 전용이다.** 사람이 읽을 말은 전부 stderr 로. 한 줄이라도 섞이면 클라이언트가 프로토콜을 잃는다.
-- **도구 실패는 프로토콜 오류가 아니다.** `isError: true` 로 돌려줘야 모델이 읽고 고쳐 부른다. JSON-RPC error 로 던지면 모델에게 안 간다.
-- **문서보다 실제 클라이언트로 확인했다.** 조사에서 "최신 프로토콜은 `2026-07-28`, `server/discover` 를 쓰고 요청마다 `_meta` 가 필수"라는 답을 받았는데, 지금 구현(`initialize` + 줄바꿈 JSON, protocolVersion 은 클라이언트가 말한 값을 되돌려줌)으로 `claude mcp list` 가 **✔ Connected** 를 냈고 도구 4개가 그대로 노출됐다. 스펙 문서를 믿기 전에 붙여 보는 게 빠르다.
-- 분석은 전부 몇 초 안에 끝나서 타임아웃 설정이 필요 없었다(가장 느린 `cc-chat.py` 가 3.1초).
-
-## 폴더
-
-```
-tools/cc-value.py           W1~W4 구현체 (메인)
-tools/cc-limit.py           한도 역산기
-tools/check-limit.py        cc-limit.py 정합성 검사 (고치면 이걸 돌린다)
-tools/cc-chat.py            채팅이 먹은 한도 (상태바+데스크톱+엔드포인트)
-tools/check-chat.py         cc-chat.py 정합성 검사 (고치면 이걸 돌린다)
-tools/mcp-server.py         위 도구들을 MCP 로 내놓는다 (stdio, 의존성 없음)
-skills/claudeusage/SKILL.md 클로드코드 스킬 원본 (__REPO__ 는 설치할 때 치환된다)
-install.sh                  스킬 + MCP 서버 설치 (--uninstall 로 되돌린다)
-LICENSE                     MIT
-tools/cc-usage.py           앤트로픽에서 정밀 한도값 받아오기 (9/15 첫 실행)
-tools/cc-cost.sh            초기 비용 계산기 (bash, cc-value.py 가 대체)
-tools/verify_reconstruct.py originalFile 이 온전한지 검증한 스크립트
-docs/선행조사-리포트.md       경쟁 도구 전수조사 (오류 3개 있음, 아래 참고)
-data/ratelimit-log.jsonl    한도 표본, 상태바가 계속 쌓는 중
-data/usage-log.jsonl        정밀 한도 표본 (cc-usage.py --log 로 쌓임, 9/15 현재 1줄)
-```
-
-`cc-usage.py`가 다루는 것: 맥 로그인 키체인에 있는 클로드코드 자격증명. 토큰은 실행할 때마다 읽어 앤트로픽에만 보내고 화면이나 파일 어디에도 남기지 않는다. 기록에 나가는 건 시각·한도 종류·모델 이름·소진율·리셋 시각 다섯 개뿐이다(금지 목록이 아니라 허용 목록).
-
-밖에 있지만 이 프로젝트 것:
-- `~/.claude/statusline-command.sh` — 한도 표본을 기록. 상태바라 옮길 수 없음
-- `~/.claude/.cc-value-salt` — 익명화 소금. **깃에 올리면 익명성이 깨진다.** 일부러 밖에 뒀음
-
-## 쓰는 법
+## Use it from the shell
 
 ```bash
-python3 tools/cc-value.py --project "/path/to/project"    # 그 프로젝트
-python3 tools/cc-value.py --all                            # 전부
-python3 tools/cc-value.py --project <경로> --waste          # 낭비 진단
-python3 tools/cc-value.py --project <경로> --mix            # 활동별 분해
-python3 tools/cc-value.py --project <경로> --export         # 보낼 데이터 + 유출 검사
-
-python3 tools/cc-limit.py                                  # 창별 한도 소진
-python3 tools/cc-limit.py --fit                            # 한도 가설 적합
-python3 tools/cc-limit.py --steps                          # 변화점 전부
-python3 tools/cc-limit.py --weekly                         # 7일 창
-python3 tools/cc-limit.py --csv data/limit-steps.csv       # 변화점 내보내기
-python3 tools/check-limit.py                               # 정합성 검사
-
-python3 tools/cc-chat.py                                   # 주간 채팅 몫 (정답 대조)
-python3 tools/cc-chat.py --windows                         # 5시간 창별 추정
-python3 tools/cc-chat.py --sources                         # 소스별 커버리지
-python3 tools/check-chat.py                                # 정합성 검사
-
-python3 tools/cc-usage.py                                  # 지금 한도 + 제품별 분해
-python3 tools/cc-usage.py --log                            # 표본 한 줄 쌓기
-python3 tools/cc-usage.py --shape                          # 응답 구조만
-python3 tools/cc-usage.py --tail 20                        # 쌓인 기록 보기
+python3 tools/cc-value.py --all            # all projects
+python3 tools/cc-value.py --project PATH --waste
+python3 tools/cc-limit.py                  # limit burn per 5-hour window
+python3 tools/cc-limit.py --fit            # fit: what the gauge weighs
+python3 tools/cc-chat.py                   # chat's share, weekly
+python3 tools/cc-usage.py                  # live limits + product breakdown
 ```
 
----
+## How the chat estimate works
 
-## 제품 방향: 사람이 아니라 AI를 노린다
+Three sources, each blind in a different way, so they are merged:
 
-여기 있는 개념은 설명이 길다. 살아남은 줄, 컨텍스트 비대, 한도 가중치. 사람에게 이걸 다 설명해서 초기 흥행을 내기는 어렵다. 그래서 **처음부터 AI를 독자로 잡는다.**
+| Source | Gives | Blind when |
+| --- | --- | --- |
+| Status line samples | Gauge readings with reset times | Claude Code isn't running |
+| Claude desktop app history | Gauge readings every 15 min | The app isn't running |
+| OAuth usage endpoint | **Per-product truth** (Claude Code / chat / Cowork) | Only the current weekly window |
 
-### 조사해 보니 방향의 절반만 맞았다 (2026-09-04)
+The estimate is a subtraction: `chat = gauge rise − what local logs explain`. The "explained" part uses per-model weights fitted by `cc-limit.py`, fitted only on windows with no suspected off-log usage — otherwise chat usage inflates the weights and the estimator goes blind to itself.
 
-**llms.txt 는 발견을 못 시켜 준다.**
+Two things had to be corrected, both found by running it on real data:
 
-- 도메인 30만 개 중 채택률 10.13%. 포춘 500 은 7.4%.
-- 90일간 AI 봇 방문 5억 건 중 `llms.txt` 를 실제로 가져간 건 **408건**. GPTBot·ClaudeBot·PerplexityBot 전부 그냥 HTML 을 긁는다.
-- 구글은 2025-07 에 공개적으로 "안 쓴다"고 했다. 2026 1분기까지 OpenAI·구글·앤트로픽·Meta·Mistral 중 프로덕션에서 읽겠다고 약속한 곳이 없다.
-- 핵심: **"llms.txt 는 상대가 이미 내 도메인을 알아야 작동한다."** 이해를 돕는 층이지 발견시키는 층이 아니다.
+1. **Half-observed windows tilt the subtraction.** If the gauge is only watched for part of a window, the rise reads low while the attributed cost reads high. Only windows with a known reset time, watched from zero, are counted (55 of 107 here).
+2. **Log-derived cost runs 6–9% low** — background calls never reach the logs. Left alone, that gap becomes fake chat usage. Each window is scaled against the status line's own total.
 
-**그런데 딱 한 군데 예외가 우리 자리다.**
+`python3 tools/check-chat.py` verifies 15 invariants, including an anchor: a real window where chat was confirmed by hand.
 
-개발자 도구는 다르다. Cursor·Continue·Cline 과 MCP 연동은 llms.txt 를 실제로 읽는다. 개발 문서 사이트가 채택이 빨랐던 이유도 그거다. **코딩 에이전트가 이 파일을 실증적으로 읽는 유일한 소비자다.** 우리 사용자가 정확히 그 사람들이다.
+## Accuracy, honestly
 
-### 그래서 어떻게 하나
+- The per-product breakdown is ground truth, but only one weekly window of it has been collected so far. Calling the estimator "validated" needs more.
+- Model weights come from 5–7 clean windows for the less-used models. Direction is solid; the exact multiplier still moves.
+- Limit gauges are integers. One change point is coarse; answers are averages over ~1,200 of them.
+- `cc-usage.py` reads Claude Code's credentials from the macOS keychain, sends them only to `api.anthropic.com`, and never prints or stores them. What it records is an allowlist: timestamp, limit kind, model name, percentage, reset time, product shares.
 
-**발견은 llms.txt 가 아니라 다른 게 한다.**
+## What's not here yet
 
-| 층 | 수단 | 하는 일 |
-|---|---|---|
-| 발견 | MCP 레지스트리 (mcp.so 22,000개 등록, smithery.ai, glama.ai) | 에이전트가 우리를 찾게 |
-| 발견 | `/.well-known/ai-catalog.json` (Agentic Resource Discovery 초안) | 사이트가 가진 도구를 기계가 읽게 |
-| 이해 | `llms.txt` / `llms-full.txt` | 찾은 뒤 제대로 알아먹게 |
-| 실행 | MCP 서버 + 클로드코드 스킬 | AI 가 직접 돌리게 |
+Other vendors. Merging ChatGPT and Gemini exports was the original plan for "combine coding and chat"; this covers the Claude account only. That part is about subscription money rather than rate limits, so it needs its own metrics.
 
-**가장 중요한 건 형태다.** 우리 도구는 로컬 로그를 읽는다. 웹사이트로 만들면 사용자가 153MB 를 업로드해야 한다. 반면 MCP 서버나 스킬로 만들면 **데이터가 있는 자리에서 그대로 돈다.** 즉 AI 네이티브 배포는 마케팅 수법이 아니라 이 제품의 자연스러운 형태다.
+## License
 
-그림은 이렇다. 사용자가 클로드코드에 "나 구독 잘 쓰고 있어?"라고 묻는다. 클로드코드가 우리 도구를 돌려서 답한다. **AI 가 우리 사용자다.**
-
-### 착수 순서
-
-1. ~~**코딩 + 순수 채팅 통합**~~ — Claude 계정 안은 09-16 완료(`cc-chat.py`). 타사 export 는 남았다.
-2. ~~**MCP 서버 + 클로드코드 스킬로 포장**~~ — 09-16 완료. `tools/mcp-server.py`, `skills/claudeusage/`.
-3. **레지스트리 등록** ← 다음 — mcp.so, smithery.ai, glama.ai, awesome-mcp-servers.
-4. **사이트 + llms.txt + ai-catalog.json** — 위 셋이 된 다음. 순서를 바꾸면 아무도 안 온다.
-
----
-
-## 로그 파싱 함정 (하나라도 놓치면 숫자가 크게 틀림)
-
-전부 실측으로 확인했다.
-
-1. **중복 2.26배** — 한 응답이 content block 수만큼 여러 줄로 기록되고 전부 같은 `usage`를 단다. `message.id`로 dedup 필수.
-2. **서브에이전트는 별도 파일** — `<세션ID>/subagents/agent-*.jsonl`. 메인만 읽으면 요청 25% 누락.
-3. **캐시쓰기 TTL** — `ephemeral_1h`(입력가×2) vs `ephemeral_5m`(×1.25). **플랜과 무관하게 섞여 나온다**(Max 5x 개인 계정에서 1h 4140건/5m 268건). 뭉뚱그리면 60% 과소계상.
-4. **깨진 서로게이트 페어** — 일부 줄이 jq/json 파싱을 통째로 멈춘다. 그 줄만 건너뛰기.
-5. **`structuredPatch`는 새 파일 Write 일 때 비어 있다** — 39줄 파일을 만들어도 `+0`. 이걸 그대로 세는 도구는(ccusage, 클로드코드 자체의 `cost.total_lines_added` 포함) 신규 파일을 0으로 계상한다.
-6. **`cd "..." && ` 접두사** — 안 벗기면 Bash 명령의 90%가 미분류.
-7. **로그 기반 계산은 약 6% 적게 나온다** — 로그에 안 남는 백그라운드 호출이 있다. 상태바의 `cost.total_cost_usd`가 더 완전하다(단가는 요청 단위로 대조 시 오차 $0.0000).
-8. **터미널로 고친 파일은 안 보인다** — Edit/Write 도구를 안 거치면 기록이 없다.
-9. **맥은 한글 경로를 자모로 분해(NFD)해 돌려준다** — `피`가 `ㅍ`+`ㅣ` 두 글자. NFC 정규화 필요.
-10. **`claude-fable-5-1`이 `fable-5` 규칙에 먼저 걸린다** — 이름이 부분 문자열이라서. Fable 5.1 은 $5/$25 인데 Fable 5 의 $10/$50 로 계산돼 **정확히 2배** 부푼다. 단가표는 반드시 긴 이름부터 봐야 한다. 세 도구 모두 고쳤다(2026-09-04). 실측 역산값: Fable 5.1 $5.04/$25.21, Opus 5 $5.04/$25.20, Fable 5 $10.02/$50.10. 잡은 방법: 단일 모델 세션의 계산값을 상태바 누계와 나눠 봤더니 다른 모델은 전부 0.93~0.97인데 Fable 5.1 만 1.9였다.
-11. **한도 표본은 세션마다 오래된 스냅샷을 들고 있다** — 각 세션은 자기 마지막 응답 때의 값을 보여준다. 시간순으로 그냥 늘어놓으면 같은 창 안에서 값이 내려간 것처럼 보인다(실측 488건). **창 안에서 누적 최대**로 읽어야 한다.
-12. **상태바의 `context_window.total_input_tokens`는 누계가 아니라 창 스냅샷이다** — 더하면 안 된다. 누계인 건 `cost.total_cost_usd` 하나뿐. 토큰 내역은 대화 기록에서 가져와야 한다.
-13. **5시간 창 경계는 시계로 계산할 수 없다** — 실측에서 09:20 → 23:00 → 05:00 으로 두 번 밀렸다. 쉬다가 다시 쓰면 창이 새로 열린다. `rate_limits.five_hour.resets_at`으로만 묶어야 한다.
-14. **`<synthetic>` 모델 항목이 섞여 있다** — 클로드코드가 만든 가짜 메시지다. `usage`는 달려 있지만 실제 호출이 아니라 빼야 한다.
-15. **한도 게이지에는 로그에 없는 사용이 섞인다** — claude.ai 채팅·앱도 같은 5시간 한도를 먹는다. 이 몫을 로컬 토큰에 얹어 적합하면 배율이 틀어진다(9/15 실측 전체의 10%). `cc-limit.py` 는 Δ5%p 이상 & 1%p당 $0.3 미만 변화점을 "로그밖"으로 표시하고 적합에서 뺀다.
-
-## 조사 리포트의 오류 (실측으로 확인)
-
-`docs/선행조사-리포트.md`는 유용하지만 세 군데가 틀렸다.
-
-1. "캐시 TTL이 5m=Pro, 1h=Team/Ent" → **아니다.** Max 5x 개인 계정에서 둘 다 나온다. 플랜이 아니라 세션 설정.
-2. "thinking 토큰이 `output_tokens`에서 빠진다" → **아니다.** 4,423건 중 위반 0건. 포함이 맞다.
-3. "`input_tokens`가 1로 기록되는 버그" → 실제론 2이고, **버그가 아닐 수 있다.** 캐시가 입력을 다 흡수한 정상값으로 보인다. 어느 쪽이든 실제 입력량은 `cache_read + cache_creation`으로 봐야 한다.
-
-리포트에 없는 필드: `speed`(fast 모드는 Opus 5에서 $10/$50, 2배), `service_tier`.
-
----
-
-## 다음에 할 만한 것
-
-착수 순서는 위 "제품 방향"에 있다. 여기는 그 외 잔여 항목.
-
-- **정답 표본 쌓기** — `cc-usage.py --log` 를 주마다. 주간 창이 지나가면 그 주 정답은 영영 못 받는다. 표본이 쌓여야 `cc-chat.py` 추정을 제대로 채점한다
-- **타사 채팅** — ChatGPT `conversations.json`, Gemini Takeout. 한도가 아니라 구독료 얘기라 지표부터 다시 정해야 한다
-- **저절로 되는 것** — Fable 5.1 은 순수 창이 5개뿐이다. Fable을 쓰는 날이 쌓이면 `cc-limit.py --fit` 만 다시 돌리면 된다
-- **모델별 주간 한도 지켜보기** — `cc-usage.py --log` 를 가끔 돌려 `weekly_scoped(Fable)` 추이를 쌓는다. 9/15 에 33%. 한 줄로는 계산 방식을 모른다
-- **다른 CLI 확장** — Codex 로그 파서. 통합의 폭을 넓히는 쪽이라 채팅 통합 다음
-
-## 지켜야 할 것
-
-- **유출 검사는 반드시 일부러 유출을 넣어 시험한다.** 처음 구현은 문자열 "모양"으로 검사했다가 9개 중 4개가 뚫렸다(파일명 `storage.ts`, 원본 세션ID, `sk-ant-...`가 전부 모델명 패턴을 통과). 모양이 아니라 **값 자체를 허용 목록**으로.
-- **발견이라고 부르기 전에 검색부터 한다.** "모델마다 한도 배율이 다르다"를 우리 발견으로 적었는데, 클로드코드 모델 선택 화면에 이미 "Uses your limits ~2x faster than Opus"라고 떠 있었다. 조사 리포트에 없다는 건 아무 근거가 안 된다. 리포트는 2026-08 기준이고 그 뒤로 바뀐다.
-- **배수를 낼 때는 분모를 밝힌다.** 같은 데이터로 Fable 5.1이 토큰당 2.9배, 달러당 4.8배로 나온다. 달러당은 세션 스타일이 섞여 모델 가중치가 아니다. 어느 쪽인지 안 쓰면 틀린 말이 된다.
-- **한도 도구를 고치면 `python3 tools/check-limit.py`를 돌린다.** 창 묶기·귀속 구간·비용 대조·단가표를 한 번에 본다.
-- **지표를 바꾸면 반드시 실데이터에 돌려본다.** 위 발견 세 개가 전부 실데이터에서만 나왔다. W1에서 복원 실패분을 패치 합계로 대신했다가 삭제 게이밍 구멍이 되살아난 적도 있다.
+MIT

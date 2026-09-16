@@ -54,7 +54,7 @@ def main():
     ratios = sorted(L.agg(w["steps"])["cost"] / bar[w["reset"]]
                     for w in wins if bar.get(w["reset"], 0) > 5)
     med = ratios[len(ratios) // 2]
-    # 로그 기반은 상태바보다 약 6% 적게 나오는 게 정상이다(README 함정 7).
+    # 로그 기반은 상태바보다 약 6% 적게 나오는 게 정상이다(README.ko.md 함정 7).
     # 로그에 안 남는 백그라운드 호출이 세션마다 $0.3~$4 씩 있고, 이건 세션 크기와
     # 무관해서 작은 세션이 많은 창일수록 비율이 더 내려간다.
     ck("창별 기록/상태바 중앙값이 0.85~1.02", 0.85 <= med <= 1.02,
