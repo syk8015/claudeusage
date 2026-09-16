@@ -400,10 +400,39 @@ python3 tools/cc-usage.py --tail 20                        # 쌓인 기록 보�
 
 1. ~~**코딩 + 순수 채팅 통합**~~ — Claude 계정 안은 09-16 완료(`cc-chat.py`). 타사 export 는 남았다.
 2. ~~**MCP 서버 + 클로드코드 스킬로 포장**~~ — 09-16 완료. `tools/mcp-server.py`, `skills/claudeusage/`.
-3. **레지스트리 등록** ← 다음 — mcp.so, smithery.ai, glama.ai, awesome-mcp-servers.
+3. **레지스트리 등록** ← 진행 중 — 공식 레지스트리는 09-16 완료(`io.github.syk8015/claudeusage`, status active). 아래 "등록" 절.
 4. **사이트 + llms.txt + ai-catalog.json** — 위 셋이 된 다음. 순서를 바꾸면 아무도 안 온다.
 
 ---
+
+## 등록 (2026-09-16~)
+
+### 공식 MCP 레지스트리 — 완료
+
+`io.github.syk8015/claudeusage` v1.0.0, status active. `server.json` 이 저장소에 있다.
+
+- **심사가 없다.** API 호출 한 번이고 사후 삭제만 있다.
+- **패키지(PyPI 등) 없이 메타데이터만으로도 된다.** 스키마를 직접 받아 확인했다 — 필수는 `name`·`description`·`version` 셋뿐이다. 조사 답변 중 "패키지가 필수"라는 게 있었는데 **틀렸다.**
+- `description` 은 **100자 제한**이 실재한다. 우리 깃허브 설명 136자는 거부됐을 것이라 84자로 줄였다.
+- **한번 올린 버전은 못 지우고 못 고친다.** 고치려면 버전을 올려 다시 낸다.
+- 깃허브 기기 인증은 **코드 유효시간이 15분**이라 자리를 비우면 만료된다. 두 번 겪었다. `mcp-publisher login github --token "$(gh auth token)"` 로 우회했다(토큰 값이 기록에 안 남게 명령 안에서 넘긴다).
+
+### 남은 곳
+
+| 곳 | 상태 | 비고 |
+|---|---|---|
+| glama.ai | 사장님 로그인 필요 | Dockerfile·glama.json 넣어 뒀다. 여기 배지가 punkpeye 병합 확률을 올린다 |
+| mcp.so | 사장님 로그인 필요 | 저장소 URL + 이름만. 무료는 검토 대기 |
+| punkpeye/awesome-mcp-servers | 문구 준비됨 | 9.5만 스타. Monitoring 절. glama 배지 뒤에 낸다 |
+| mcpservers.org | 나중 | wong2 목록에 반영. 레지스트리 이름 칸이 있다 |
+| awesome-claude-code | **09-30부터** | 5.4만 스타. 저장소가 14일은 돼야 한다. 그 전엔 자동으로 닫힌다 |
+| Claude Code 플러그인 | 나중 | 앤트로픽이 직접 운영. 우리는 이미 "MCP+스킬" 모양이다 |
+| smithery.ai | 안 함 | 저장소 방식이 없어졌다. `.mcpb` 번들이 필요하다 |
+| PulseMCP | 불가 | 제출 중단. 레지스트리를 자동으로 긁어간다 |
+
+### 위치잡기
+
+이웃이 **전부** 토큰·비용·한도를 잰다(ccusage, contextburn, Claumon, scvd-tab, llmkit …). 우리만 **"짠 코드가 살아남았는지"**를 잰다. 한 줄 소개에 그게 안 들어가면 열넷째 비용 추적기로 읽힌다.
 
 ## 로그 파싱 함정 (하나라도 놓치면 숫자가 크게 틀림)
 

@@ -114,6 +114,10 @@ Two things had to be corrected, both found by running it on real data:
 
 Other vendors. Merging ChatGPT and Gemini exports was the original plan for "combine coding and chat"; this covers the Claude account only. That part is about subscription money rather than rate limits, so it needs its own metrics.
 
+## Registry
+
+Listed on the official MCP registry as **`io.github.syk8015/claudeusage`**.
+
 ## License
 
 MIT
