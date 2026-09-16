@@ -6,16 +6,12 @@ check-limit.py — cc-limit.py 를 실데이터에 돌려 정합성을 검사한
 이 프로젝트의 규칙: 지표를 바꾸면 반드시 실데이터에 돌려본다. 지금까지 나온
 발견이 전부 실데이터에서만 나왔기 때문이다. cc-limit.py 를 손대면 이걸 돌린다.
 
-    python3 tools/check-limit.py
+    claudeusage check
 """
 
-import os, sys, bisect, importlib.util
+import os, sys, bisect
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-_spec = importlib.util.spec_from_file_location("cclimit", os.path.join(HERE, "cc-limit.py"))
-L = importlib.util.module_from_spec(_spec)
-sys.argv = ["check"]
-_spec.loader.exec_module(L)
+from . import cc_limit as L
 
 FAIL = []
 

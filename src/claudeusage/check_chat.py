@@ -8,16 +8,12 @@ cc-chat.py 는 뺄셈으로 채팅 몫을 추정한다. 뺄셈은 양쪽이 같�
 그날 한국시간 11:40~15:20 에 채팅을 썼다고 사용자가 확인했고, 로그로도 5시간 창이
 15→53% 로 뛰었다. 이 창을 못 잡으면 추정기가 죽은 것이다.
 
-    python3 tools/check-chat.py
+    claudeusage check
 """
 
-import os, sys, importlib.util
+import os, sys
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-_spec = importlib.util.spec_from_file_location("ccchat", os.path.join(HERE, "cc-chat.py"))
-C = importlib.util.module_from_spec(_spec)
-sys.argv = ["check"]
-_spec.loader.exec_module(C)
+from . import cc_chat as C
 
 FAIL = []
 

@@ -7,10 +7,10 @@ cc-usage.py — 앤트로픽이 직접 알려주는 한도 수치를 받아 기�
 거칠고, 모델별 주간 한도(weekly_scoped)는 아예 안 온다. 같은 값의 원본인
 `api.anthropic.com/api/oauth/usage` 는 둘 다 준다.
 
-    python3 tools/cc-usage.py             지금 한도를 보여준다
-    python3 tools/cc-usage.py --log       data/usage-log.jsonl 에 한 줄 덧붙인다
-    python3 tools/cc-usage.py --shape     응답에 뭐가 들어 있는지 구조만 (값 없이)
-    python3 tools/cc-usage.py --tail 20   쌓인 기록 마지막 20줄
+    claudeusage usage             지금 한도를 보여준다
+    claudeusage usage --log       data/usage-log.jsonl 에 한 줄 덧붙인다
+    claudeusage usage --shape     응답에 뭐가 들어 있는지 구조만 (값 없이)
+    claudeusage usage --tail 20   쌓인 기록 마지막 20줄
 
 토큰 취급:
   맥 로그인 키체인의 "Claude Code-credentials" 에서 그때그때 읽어 앤트로픽에만 보낸다.
@@ -29,11 +29,10 @@ cc-usage.py — 앤트로픽이 직접 알려주는 한도 수치를 받아 기�
 
 import json, os, sys, subprocess, urllib.request, urllib.error
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.dirname(HERE)
-sys.path.insert(0, HERE)
-from i18n import t, is_ko                       # noqa: E402  (경로를 넣은 뒤라야 한다)
-LOG = os.path.join(ROOT, "data", "usage-log.jsonl")
+from .i18n import t, is_ko
+from . import paths
+
+LOG = paths.usage_log()
 
 USAGE_URL = "https://api.anthropic.com/api/oauth/usage"
 KEYCHAIN_SERVICE = "Claude Code-credentials"
@@ -336,7 +335,7 @@ def append_log(data):
         f.write(json.dumps(row, ensure_ascii=False) + "\n")
     n = sum(1 for _ in open(LOG, encoding="utf-8", errors="replace"))
     print(t("Appended 1 sample → %s (%d total)", "기록 1줄 추가 → %s (총 %d줄)")
-          % (os.path.relpath(LOG, ROOT), n))
+          % (LOG, n))
 
 
 def tail(n):

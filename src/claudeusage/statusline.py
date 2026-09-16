@@ -11,10 +11,10 @@ cc-chat.py 가 이걸 거꾸로 풀어 "한도가 무엇을 먹고 올랐나"를
 두 가지 방법으로 쓴다.
 
   1. 상태바가 없거나 이걸 그냥 쓰고 싶다면 — 기록하고 간단한 상태바를 찍는다.
-         python3 tools/statusline-sample.py --print
+         claudeusage statusline --print
 
   2. 이미 쓰는 상태바가 있다면 — 기록하고 받은 JSON 을 그대로 흘려보낸다.
-         python3 tools/statusline-sample.py | bash ~/.claude/my-statusline.sh
+         claudeusage statusline | bash ~/.claude/my-statusline.sh
 
 설정은 ~/.claude/settings.json 의 statusLine 에 넣는다. install.sh 가 그대로
 복사해 붙일 수 있는 조각을 찍어 준다.
@@ -24,11 +24,10 @@ cc-chat.py 가 이걸 거꾸로 풀어 "한도가 무엇을 먹고 올랐나"를
 
 import json, os, sys
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.dirname(HERE)
-sys.path.insert(0, HERE)
-from i18n import t                              # noqa: E402  (경로를 넣은 뒤라야 한다)
-LOG = os.path.join(ROOT, "data", "ratelimit-log.jsonl")
+from .i18n import t
+from . import paths
+
+LOG = paths.ratelimit_log()
 STATE = os.path.expanduser("~/.claude")
 
 

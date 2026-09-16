@@ -31,15 +31,15 @@ Git-based tools track code with `git blame`, so anything you never committed is 
 
 ## Install
 
-Requires Python 3 (standard library only, no dependencies), the `claude` CLI, and macOS for the live-limit tool.
+Requires Python 3.9+ (standard library only, no dependencies) and macOS for the live-limit tool.
 
 ```bash
-git clone <this repo> && cd claudeusage
-./install.sh          # installs the skill + registers the MCP server (user scope)
-claude mcp list       # claudeusage … ✔ Connected
+pip install claudeusage        # or: uv tool install claudeusage
+claude mcp add --scope user --transport stdio claudeusage -- claudeusage-mcp
+claude mcp list                # claudeusage … ✔ Connected
 ```
 
-`./install.sh --uninstall` reverses it. The installer writes the repo's real path into the installed skill, so the checkout can live anywhere.
+That gives you the `claudeusage` command and the `claudeusage-mcp` server. To also install the Claude Code skill — which teaches Claude which tool to reach for and how to phrase the numbers — clone the repo and run `./install.sh`; it installs the package in editable mode, drops the skill in `~/.claude/skills/`, and registers the server. `./install.sh --uninstall` reverses it.
 
 ### One more step for the limit tools
 
@@ -48,19 +48,21 @@ Claude Code shows your limit gauge and throws it away — nothing stores it. `cc
 ```json
 "statusLine": {
   "type": "command",
-  "command": "python3 /path/to/claudeusage/tools/statusline-sample.py --print"
+  "command": "claudeusage statusline --print"
 }
 ```
 
 Already have a status line you like? Drop `--print` and pipe into it — the collector passes the JSON straight through:
 
 ```json
-"command": "python3 /path/to/claudeusage/tools/statusline-sample.py | bash ~/.claude/my-statusline.sh"
+"command": "claudeusage statusline | bash ~/.claude/my-statusline.sh"
 ```
 
-`install.sh` prints this snippet with your real path filled in. It does not edit your settings — your status line is yours.
+Nothing edits your settings for you — your status line is yours.
 
-**`cc-value.py` and `cc-usage.py` work right away**, with no collector. The limit analysis gets useful after a few days of samples.
+**`claudeusage value` and `claudeusage usage` work right away**, with no collector. The limit analysis gets useful after a few days of samples.
+
+Samples live in `~/.claudeusage/` (override with `CLAUDEUSAGE_DATA`). Running from a clone keeps using the repo's own `data/` directory, so an existing history is never orphaned.
 
 ## Use it from Claude
 
@@ -76,13 +78,16 @@ Ask in plain language — "am I getting my money's worth?", "why is my limit dra
 ## Use it from the shell
 
 ```bash
-python3 tools/cc-value.py --all            # all projects
-python3 tools/cc-value.py --project PATH --waste
-python3 tools/cc-limit.py                  # limit burn per 5-hour window
-python3 tools/cc-limit.py --fit            # fit: what the gauge weighs
-python3 tools/cc-chat.py                   # chat's share, weekly
-python3 tools/cc-usage.py                  # live limits + product breakdown
+claudeusage value --all              # all projects
+claudeusage value --project PATH --waste
+claudeusage limit                    # limit burn per 5-hour window
+claudeusage limit --fit              # fit: what the gauge weighs
+claudeusage chat                     # chat's share, weekly
+claudeusage usage                    # live limits + product breakdown
+claudeusage check                    # both consistency checkers
 ```
+
+Output is English by default. `CLAUDEUSAGE_LANG=ko` switches it to Korean.
 
 ## How the chat estimate works
 
@@ -117,6 +122,10 @@ Other vendors. Merging ChatGPT and Gemini exports was the original plan for "com
 ## Registry
 
 Listed on the official MCP registry as **`io.github.syk8015/claudeusage`**.
+
+<!-- mcp-name: io.github.syk8015/claudeusage -->
+
+Also on [Glama](https://glama.ai/mcp/servers/syk8015/claudeusage) and PyPI (`pip install claudeusage`).
 
 ## License
 

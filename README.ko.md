@@ -2,12 +2,12 @@
 
 *English: [README.md](README.md). 이 문서는 작업 노트다 — 실측 수치와 틀렸던 과정이 다 들어 있다.*
 
-AI 구독료를 제대로 뽑고 있는지 재주는 서비스. 엔진·채팅 통합·MCP 포장까지 됐고, **공개(레지스트리 등록) 직전**이다.
+AI 구독료를 제대로 뽑고 있는지 재주는 서비스. 엔진·채팅 통합·MCP 포장·공개·레지스트리 등록까지 마쳤고, 지금은 **PyPI 배포** 단계다.
 
 원래 "피부 셀프 케어 어플" 폴더에서 급하게 시작했다가 2026-09-01에 여기로 옮겼다.
 
 > **다음 세션은 여기서 시작한다.**
-> 1. 채팅 통합(`cc-chat.py`)과 **MCP 서버 + 스킬 포장까지 완료**(2026-09-16). 다음 할 일은 **레지스트리 등록**(mcp.so, smithery.ai, glama.ai). 순서는 [제품 방향](#제품-방향-사람이-아니라-ai를-노린다) 절.
+> 1. 공식 레지스트리·glama·mcp.so·punkpeye PR 까지 냈다(아래 "등록" 절). 지금은 **PyPI 배포** 중이고, 그다음은 **awesome-claude-code(09-30부터)** 다. 순서는 [제품 방향](#제품-방향-사람이-아니라-ai를-노린다) 절.
 > 2. 껍데기는 웹사이트가 아니라 **MCP 서버 + 클로드코드 스킬**이다. 이 도구는 로컬 로그를 읽으므로 데이터가 있는 자리에서 도는 게 자연스럽다.
 > 3. 한도 분석은 2026-09-15에 재분석했다(창 55개). 새로 나온 것: **한도의 10%는 로컬 로그 밖(채팅·앱)에서 먹었다.** 채팅 통합이 필요한 실측 근거다. 상태바 수집기는 계속 쌓으니 가끔 `--fit` 만 다시 돌리면 된다.
 
@@ -179,7 +179,7 @@ Opus 4.8이 Opus 5보다 1.6배쯤 빨리 닳는다는 건 새로 나온 것이�
 
 ### 엔드포인트를 불러 봤더니 (2026-09-04, 예상이 빗나감)
 
-"상태바는 정수라 거치니 원본을 부르면 더 정밀할 것"이라고 보고 `tools/cc-usage.py`를 만들었다. **틀렸다.**
+"상태바는 정수라 거치니 원본을 부르면 더 정밀할 것"이라고 보고 `cc_usage.py`를 만들었다. **틀렸다.**
 
 - `five_hour.utilization`은 타입이 실수인데 값은 `26.0`이었다. `limits[].percent`는 아예 정수다.
 - 같은 시각 상태바도 26~27을 보이고 있었다. **두 소스가 같은 숫자를 준다.**
@@ -241,7 +241,7 @@ Claude Code 92% · Chats 8% · Cowork 0% · Other 0%
 1. **관측이 반쪽인 창은 뺄셈이 통째로 기운다.** 8월은 리셋 시각이 없어 창을 되짚어야 하는데, 앱이 켜진 토막만 보이니 상승분은 낮게 설명분은 높게 나온다(상승 6%p인데 설명 38.6%p인 창도 있었다). 게다가 음수를 0으로 자르면 양수만 남아 채팅이 부푼다 — 처음 돌렸을 때 8월 첫 주가 59%로 나왔다. 그래서 **리셋 시각을 알고 0부터 본 창만** 합계에 넣는다(107개 중 55개).
 2. **로그 기반 비용은 6~9% 적게 잡힌다**(함정 7). 그대로 두면 차액이 전부 채팅으로 넘어간다. 창별로 상태바 누계와 대조해 되돌린다. 이 보정 하나로 잔차 합이 +235%p → +35%p 로 줄었다.
 
-`python3 tools/check-chat.py` 가 위 둘과 9/14 앵커를 포함해 15가지를 검사한다.
+`claudeusage check` 가 위 둘과 9/14 앵커를 포함해 15가지를 검사한다.
 
 ### 아직 절반이다
 
@@ -294,7 +294,7 @@ claude mcp list        # claudeusage … ✔ Connected 이 떠야 한다
 
 표본을 쌓는 게 `~/.claude/statusline-command.sh` 인데 **그건 내 개인 파일이라 저장소에 없었다.** 한도 분석은 이 프로젝트의 핵심인데 새 사용자는 아예 못 쓰는 상태로 공개한 셈이다.
 
-그래서 `tools/statusline-sample.py` 를 만들어 넣었다. jq 없이 파이썬만 쓰고, 두 가지로 돈다 — `--print` 면 간단한 상태바를 찍고, 없으면 받은 JSON 을 그대로 흘려보내 기존 상태바 앞에 이어 붙일 수 있다. 무슨 일이 있어도 상태바를 깨뜨리지 않는다(기록 실패는 조용히 넘어간다).
+그래서 `claudeusage statusline` 를 만들어 넣었다. jq 없이 파이썬만 쓰고, 두 가지로 돈다 — `--print` 면 간단한 상태바를 찍고, 없으면 받은 JSON 을 그대로 흘려보내 기존 상태바 앞에 이어 붙일 수 있다. 무슨 일이 있어도 상태바를 깨뜨리지 않는다(기록 실패는 조용히 넘어간다).
 
 **상태바 설정은 자동으로 안 건다.** `install.sh` 가 붙여넣을 조각만 찍는다. 상태바는 사용자 것이고, 이미 쓰던 걸 우리가 갈아엎으면 안 된다.
 
@@ -311,19 +311,20 @@ claude mcp list        # claudeusage … ✔ Connected 이 떠야 한다
 ## 폴더
 
 ```
-tools/cc-value.py           W1~W4 구현체 (메인)
-tools/cc-limit.py           한도 역산기
-tools/check-limit.py        cc-limit.py 정합성 검사 (고치면 이걸 돌린다)
-tools/cc-chat.py            채팅이 먹은 한도 (상태바+데스크톱+엔드포인트)
-tools/check-chat.py         cc-chat.py 정합성 검사 (고치면 이걸 돌린다)
-tools/mcp-server.py         위 도구들을 MCP 로 내놓는다 (stdio, 의존성 없음)
-tools/statusline-sample.py  한도 표본 수집기. 새 사용자는 이걸 상태바에 건다
-skills/claudeusage/SKILL.md 클로드코드 스킬 원본 (__REPO__ 는 설치할 때 치환된다)
-install.sh                  스킬 + MCP 서버 설치 (--uninstall 로 되돌린다)
-LICENSE                     MIT
-tools/cc-usage.py           앤트로픽에서 정밀 한도값 받아오기 (9/15 첫 실행)
-tools/cc-cost.sh            초기 비용 계산기 (bash, cc-value.py 가 대체)
-tools/verify_reconstruct.py originalFile 이 온전한지 검증한 스크립트
+src/claudeusage/cc_value.py     W1~W4 구현체 (메인)
+src/claudeusage/cc_limit.py     한도 역산기
+src/claudeusage/cc_chat.py      채팅이 먹은 한도 (상태바+데스크톱+엔드포인트)
+src/claudeusage/cc_usage.py     앤트로픽에 지금 한도를 묻는다
+src/claudeusage/check_limit.py  cc_limit 정합성 검사 (고치면 이걸 돌린다)
+src/claudeusage/check_chat.py   cc_chat 정합성 검사 (고치면 이걸 돌린다)
+src/claudeusage/mcp_server.py   위 도구들을 MCP 로 내놓는다 (stdio, 의존성 없음)
+src/claudeusage/statusline.py   한도 표본 수집기. 상태바에 건다
+src/claudeusage/cli.py          claudeusage <하위명령> 하나로 묶은 입구
+src/claudeusage/paths.py        기록을 어디에 둘지 (설치본은 ~/.claudeusage)
+src/claudeusage/i18n.py         영어 기본, CLAUDEUSAGE_LANG=ko 로 한국어
+pyproject.toml                  PyPI 패키지 정의
+tools/cc-cost.sh                초기 비용 계산기 (bash, cc_value 가 대체)
+tools/verify_reconstruct.py     originalFile 이 온전한지 검증한 스크립트
 docs/선행조사-리포트.md       경쟁 도구 전수조사 (오류 3개 있음, 아래 참고)
 data/ratelimit-log.jsonl    한도 표본, 상태바가 계속 쌓는 중
 data/usage-log.jsonl        정밀 한도 표본 (cc-usage.py --log 로 쌓임, 9/15 현재 1줄)
@@ -332,34 +333,34 @@ data/usage-log.jsonl        정밀 한도 표본 (cc-usage.py --log 로 쌓임, 
 `cc-usage.py`가 다루는 것: 맥 로그인 키체인에 있는 클로드코드 자격증명. 토큰은 실행할 때마다 읽어 앤트로픽에만 보내고 화면이나 파일 어디에도 남기지 않는다. 기록에 나가는 건 시각·한도 종류·모델 이름·소진율·리셋 시각 다섯 개뿐이다(금지 목록이 아니라 허용 목록).
 
 밖에 있지만 이 프로젝트 것:
-- `~/.claude/statusline-command.sh` — 내 상태바. 여기서 표본을 기록한다. 공개본은 같은 일을 하는 `tools/statusline-sample.py` 를 쓴다(아래)
+- `~/.claude/statusline-command.sh` — 내 상태바. 여기서 표본을 기록한다. 공개본은 같은 일을 하는 `claudeusage statusline` 를 쓴다(아래)
 - `~/.claude/.cc-value-salt` — 익명화 소금. **깃에 올리면 익명성이 깨진다.** 일부러 밖에 뒀음
 
 ## 쓰는 법
 
 ```bash
-python3 tools/cc-value.py --project "/path/to/project"    # 그 프로젝트
-python3 tools/cc-value.py --all                            # 전부
-python3 tools/cc-value.py --project <경로> --waste          # 낭비 진단
-python3 tools/cc-value.py --project <경로> --mix            # 활동별 분해
-python3 tools/cc-value.py --project <경로> --export         # 보낼 데이터 + 유출 검사
+claudeusage value --project "/path/to/project"    # 그 프로젝트
+claudeusage value --all                            # 전부
+claudeusage value --project <경로> --waste          # 낭비 진단
+claudeusage value --project <경로> --mix            # 활동별 분해
+claudeusage value --project <경로> --export         # 보낼 데이터 + 유출 검사
 
-python3 tools/cc-limit.py                                  # 창별 한도 소진
-python3 tools/cc-limit.py --fit                            # 한도 가설 적합
-python3 tools/cc-limit.py --steps                          # 변화점 전부
-python3 tools/cc-limit.py --weekly                         # 7일 창
-python3 tools/cc-limit.py --csv data/limit-steps.csv       # 변화점 내보내기
-python3 tools/check-limit.py                               # 정합성 검사
+claudeusage limit                                  # 창별 한도 소진
+claudeusage limit --fit                            # 한도 가설 적합
+claudeusage limit --steps                          # 변화점 전부
+claudeusage limit --weekly                         # 7일 창
+claudeusage limit --csv data/limit-steps.csv       # 변화점 내보내기
+claudeusage check                               # 정합성 검사
 
-python3 tools/cc-chat.py                                   # 주간 채팅 몫 (정답 대조)
-python3 tools/cc-chat.py --windows                         # 5시간 창별 추정
-python3 tools/cc-chat.py --sources                         # 소스별 커버리지
-python3 tools/check-chat.py                                # 정합성 검사
+claudeusage chat                                   # 주간 채팅 몫 (정답 대조)
+claudeusage chat --windows                         # 5시간 창별 추정
+claudeusage chat --sources                         # 소스별 커버리지
+claudeusage check                                # 정합성 검사
 
-python3 tools/cc-usage.py                                  # 지금 한도 + 제품별 분해
-python3 tools/cc-usage.py --log                            # 표본 한 줄 쌓기
-python3 tools/cc-usage.py --shape                          # 응답 구조만
-python3 tools/cc-usage.py --tail 20                        # 쌓인 기록 보기
+claudeusage usage                                  # 지금 한도 + 제품별 분해
+claudeusage usage --log                            # 표본 한 줄 쌓기
+claudeusage usage --shape                          # 응답 구조만
+claudeusage usage --tail 20                        # 쌓인 기록 보기
 ```
 
 ---
@@ -399,7 +400,7 @@ python3 tools/cc-usage.py --tail 20                        # 쌓인 기록 보�
 ### 착수 순서
 
 1. ~~**코딩 + 순수 채팅 통합**~~ — Claude 계정 안은 09-16 완료(`cc-chat.py`). 타사 export 는 남았다.
-2. ~~**MCP 서버 + 클로드코드 스킬로 포장**~~ — 09-16 완료. `tools/mcp-server.py`, `skills/claudeusage/`.
+2. ~~**MCP 서버 + 클로드코드 스킬로 포장**~~ — 09-16 완료. `src/claudeusage/mcp_server.py`, `skills/claudeusage/`.
 3. **레지스트리 등록** ← 진행 중 — 공식 레지스트리는 09-16 완료(`io.github.syk8015/claudeusage`, status active). 아래 "등록" 절.
 4. **사이트 + llms.txt + ai-catalog.json** — 위 셋이 된 다음. 순서를 바꾸면 아무도 안 온다.
 
@@ -481,5 +482,5 @@ python3 tools/cc-usage.py --tail 20                        # 쌓인 기록 보�
 - **유출 검사는 반드시 일부러 유출을 넣어 시험한다.** 처음 구현은 문자열 "모양"으로 검사했다가 9개 중 4개가 뚫렸다(파일명 `storage.ts`, 원본 세션ID, `sk-ant-...`가 전부 모델명 패턴을 통과). 모양이 아니라 **값 자체를 허용 목록**으로.
 - **발견이라고 부르기 전에 검색부터 한다.** "모델마다 한도 배율이 다르다"를 우리 발견으로 적었는데, 클로드코드 모델 선택 화면에 이미 "Uses your limits ~2x faster than Opus"라고 떠 있었다. 조사 리포트에 없다는 건 아무 근거가 안 된다. 리포트는 2026-08 기준이고 그 뒤로 바뀐다.
 - **배수를 낼 때는 분모를 밝힌다.** 같은 데이터로 Fable 5.1이 토큰당 2.9배, 달러당 4.8배로 나온다. 달러당은 세션 스타일이 섞여 모델 가중치가 아니다. 어느 쪽인지 안 쓰면 틀린 말이 된다.
-- **한도 도구를 고치면 `python3 tools/check-limit.py`를 돌린다.** 창 묶기·귀속 구간·비용 대조·단가표를 한 번에 본다.
+- **한도 도구를 고치면 `claudeusage check`를 돌린다.** 창 묶기·귀속 구간·비용 대조·단가표를 한 번에 본다.
 - **지표를 바꾸면 반드시 실데이터에 돌려본다.** 위 발견 세 개가 전부 실데이터에서만 나왔다. W1에서 복원 실패분을 패치 합계로 대신했다가 삭제 게이밍 구멍이 되살아난 적도 있다.

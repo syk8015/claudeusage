@@ -26,8 +26,7 @@ Max 구독이라 실제 청구액은 아니며 "API 정가로 냈다면" 환산�
 import json, sys, os, glob, difflib, unicodedata, re
 from collections import defaultdict
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from i18n import t          # 화면에 나가는 말만 영/한. 주석·키는 한국어 그대로
+from .i18n import t         # 화면에 나가는 말만 영/한. 주석·키는 한국어 그대로
 
 # ── 모델별 100만 토큰당 단가 (입력, 출력)
 #

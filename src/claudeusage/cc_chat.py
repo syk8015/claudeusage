@@ -25,32 +25,23 @@ cc-chat.py — 한도 중에 "클로드코드가 아닌 것"(주로 채팅)이 �
 앞의 둘은 게이지 숫자라 "얼마나 올랐나"만 알려주고 누가 올렸는지는 안 알려준다.
 그래서 뺄셈으로 추정한다. 셋째가 정답이라 추정이 맞는지 채점할 수 있다.
 
-    python3 tools/cc-chat.py             주간 요약 (정답과 대조)
-    python3 tools/cc-chat.py --windows   5시간 창별 추정
-    python3 tools/cc-chat.py --sources   소스별 커버리지
+    claudeusage chat             주간 요약 (정답과 대조)
+    claudeusage chat --windows   5시간 창별 추정
+    claudeusage chat --sources   소스별 커버리지
 """
 
-import os, sys, json, time, importlib.util
+import os, sys, json, time
 from collections import defaultdict
 
-import os, sys
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from i18n import t
-
-HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.dirname(HERE)
-
-_spec = importlib.util.spec_from_file_location("cclimit", os.path.join(HERE, "cc-limit.py"))
-L = importlib.util.module_from_spec(_spec)
-_argv, sys.argv = sys.argv, ["cc-chat"]          # cc-limit 은 import 시 argv 를 안 읽지만 안전하게
-_spec.loader.exec_module(L)
-sys.argv = _argv
+from .i18n import t
+from . import paths
+from . import cc_limit as L
 
 B, D, R, Y, G, X = "\033[1m", "\033[2m", "\033[31m", "\033[33m", "\033[32m", "\033[0m"
 
 DESKTOP = os.path.expanduser(
     "~/Library/Application Support/Claude/plan-usage-history.json")
-USAGE_LOG = os.path.join(ROOT, "data", "usage-log.jsonl")
+USAGE_LOG = paths.usage_log()
 
 WIN = 5 * 3600
 # 주간 창 경계. 실측한 seven_day.resets_at 이 09-08·09-15·09-22 전부 화요일 15:00Z 였다.
@@ -69,22 +60,30 @@ This tool takes how far the gauge rose, subtracts the share your local logs
 explain, and calls the rest chat. That needs gauge samples first, and Claude Code
 never stores them. A collector has to sit on your status line.
 
-    %s./install.sh%s prints the snippet to paste into settings.json.
+Put this in %s~/.claude/settings.json%s and samples start piling up:
+
+    "statusLine": { "type": "command", "command": "claudeusage statusline --print" }
+
+Already have a status line? Drop --print and pipe into it — the JSON passes through.
 
 Even before samples pile up, these two just work.
-    python3 tools/cc-value.py --all    surviving lines, waste (needs only your chat history)
-    python3 tools/cc-usage.py          live limits + per-product split (asks Anthropic directly)
+    claudeusage value --all    surviving lines, waste (needs only your chat history)
+    claudeusage usage          live limits + per-product split (asks Anthropic directly)
 """, """%s한도 게이지 표본이 없다.%s
 
 이 도구는 게이지가 오른 양에서 로컬 로그로 설명되는 몫을 빼서 채팅 몫을 낸다.
 그러려면 게이지 표본이 먼저 쌓여야 하는데, 클로드코드는 그 값을 저장하지 않는다.
 상태바에 수집기를 걸어야 한다.
 
-    %s./install.sh%s 가 settings.json 에 넣을 조각을 찍어 준다.
+%s~/.claude/settings.json%s 에 이걸 넣으면 쌓이기 시작한다.
+
+    "statusLine": { "type": "command", "command": "claudeusage statusline --print" }
+
+이미 쓰는 상태바가 있으면 --print 를 빼고 파이프로 이어 붙인다(JSON 을 그대로 흘려보낸다).
 
 표본이 쌓이기 전에도 이 둘은 그냥 된다.
-    python3 tools/cc-value.py --all    살아남은 줄·낭비 (대화 기록만 있으면 된다)
-    python3 tools/cc-usage.py          지금 한도 + 제품별 분해 (앤트로픽에 직접 묻는다)
+    claudeusage value --all    살아남은 줄·낭비 (대화 기록만 있으면 된다)
+    claudeusage usage          지금 한도 + 제품별 분해 (앤트로픽에 직접 묻는다)
 """) % (R, X, B, X)
 
 
@@ -428,9 +427,9 @@ def print_weeks(wins, truth):
                   % (L.utc(w["t_first"]), L.utc(w["t_top"], "%H:%M"), w["rise"],
                      "+".join(sorted(w["srcs"]))))
     if not truth:
-        print(t("%sThe truth column is empty. Running `python3 tools/cc-usage.py --log` now and then"
+        print(t("%sThe truth column is empty. Running `claudeusage usage --log` now and then"
                 " fills it. Once a weekly window passes, that week's truth is gone for good.%s",
-                "%s정답 칸이 비어 있다. `python3 tools/cc-usage.py --log` 를 가끔 돌리면 채워진다."
+                "%s정답 칸이 비어 있다. `claudeusage usage --log` 를 가끔 돌리면 채워진다."
                 " 주간 창이 지나가면 그 주 정답은 다시 못 받는다.%s") % (Y, X))
 
 

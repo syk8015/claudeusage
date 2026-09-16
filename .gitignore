@@ -16,3 +16,8 @@ __pycache__/
 # 서버 등록은 ./install.sh 가 사용자 수준으로 한다. 프로젝트 .mcp.json 을 같이 두면
 # "같은 서버가 두 곳에 정의됨" 경고가 난다. 직접 쓰고 싶으면 각자 만들 것.
 .mcp.json
+
+# 빌드 산출물
+dist/
+build/
+*.egg-info/

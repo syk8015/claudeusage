@@ -10,10 +10,10 @@ mcp-server.py — 이 프로젝트의 분석기들을 MCP 도구로 내놓는다
 
 새 분석 로직은 없다. 기존 CLI 를 그대로 감싼다.
 
-    tools/cc-value.py    살아남은 줄 · 낭비 · 활동별 비용
-    tools/cc-limit.py    한도가 뭘 먹고 오르는지
-    tools/cc-chat.py     채팅이 먹은 한도
-    tools/cc-usage.py    지금 한도 (앤트로픽에 물어봄)
+    cc_value.py    살아남은 줄 · 낭비 · 활동별 비용
+    cc_limit.py    한도가 뭘 먹고 오르는지
+    cc_chat.py     채팅이 먹은 한도
+    cc_usage.py    지금 한도 (앤트로픽에 물어봄)
 
 전송은 stdio 다. **stdout 은 JSON-RPC 전용**이고 사람이 읽을 말은 전부 stderr 로
 보낸다. 하나라도 stdout 에 섞이면 클라이언트가 프로토콜을 잃는다.
@@ -25,10 +25,8 @@ argv 리스트로 넘긴다(셸을 안 거친다).
 
 import json, os, re, subprocess, sys
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.dirname(HERE)
-sys.path.insert(0, HERE)
-from i18n import t                              # noqa: E402  (경로를 넣은 뒤라야 한다)
+from .i18n import t
+from . import paths
 
 PROTOCOL_VERSION = "2025-06-18"
 SERVER = {"name": "claudeusage", "title": "Subscription value meter", "version": "0.1.0"}
@@ -129,9 +127,9 @@ TOOLS = [
 
 # 도구 이름 → (스크립트, view 값 → 인자)
 DISPATCH = {
-    "subscription_value": ("cc-value.py", {
+    "subscription_value": ("cc_value", {
         "summary": [], "waste": ["--waste"], "mix": ["--mix"], "files": ["--files"]}),
-    "limit_breakdown": ("cc-limit.py", {
+    "limit_breakdown": ("cc_limit", {
         "windows": [], "fit": ["--fit"], "steps": ["--steps"], "weekly": ["--weekly"]}),
     "chat_share": ("cc-chat.py", {
         "weeks": [], "windows": ["--windows"], "sources": ["--sources"]}),
@@ -140,8 +138,11 @@ DISPATCH = {
 
 
 def build_argv(name, args):
+    # 하위 프로세스로 돌린다. 분석 도구들이 sys.argv 를 직접 읽고 표를 찍는 구조라,
+    # 같은 프로세스에서 부르면 출력을 가로채기가 지저분하다. 모듈 이름으로 부르므로
+    # 설치본(site-packages)에서도 저장소에서도 똑같이 동작한다.
     script, views = DISPATCH[name]
-    argv = [sys.executable, os.path.join(HERE, script)]
+    argv = [sys.executable, "-m", "claudeusage." + script]
 
     if name == "subscription_value":
         scope = args.get("scope", "all")
@@ -172,7 +173,7 @@ def run_tool(name, args):
     argv = build_argv(name, args)
     log("run: %s" % " ".join(argv[1:]))
     try:
-        p = subprocess.run(argv, cwd=ROOT, capture_output=True, text=True,
+        p = subprocess.run(argv, capture_output=True, text=True,
                            timeout=RUN_TIMEOUT)
     except subprocess.TimeoutExpired:
         raise ValueError(t("Did not finish within %ds — a very large history.",
@@ -247,7 +248,7 @@ def handle(req):
 
 
 def main():
-    log("claudeusage MCP server started (%s)" % ROOT)
+    log("claudeusage MCP server started (data: %s)" % paths.data_dir())
     for line in sys.stdin:
         line = line.strip()
         if not line:

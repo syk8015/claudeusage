@@ -11,33 +11,24 @@ cc-limit.py — 5시간/주간 한도가 무엇을 먹고 오르는지 역산한
 시간축에서 맞물리면, 게이지가 1%p 오를 때마다 그 사이에 들어간 토큰을 알 수 있다.
 그 표를 200개쯤 모아 게이지의 식을 거꾸로 푼다.
 
-    python3 tools/cc-limit.py            창별 표
-    python3 tools/cc-limit.py --steps    변화점 전부
-    python3 tools/cc-limit.py --fit      가설 적합
-    python3 tools/cc-limit.py --weekly   7일 창 기준
-    python3 tools/cc-limit.py --csv 경로  변화점을 CSV로
-    python3 tools/cc-limit.py --log 경로  다른 표본 파일
+    claudeusage limit            창별 표
+    claudeusage limit --steps    변화점 전부
+    claudeusage limit --fit      가설 적합
+    claudeusage limit --weekly   7일 창 기준
+    claudeusage limit --csv 경로  변화점을 CSV로
+    claudeusage limit --log 경로  다른 표본 파일
 """
 
-import json, os, sys, glob, time, calendar, bisect, importlib.util
+import json, os, sys, glob, time, calendar, bisect
 from collections import defaultdict
 
-import os, sys
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from i18n import t
-
-HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.dirname(HERE)
-
-# ── cc-value.py 재사용. 파일명에 하이픈이 있어 import 가 안 되므로 직접 로드한다.
-_spec = importlib.util.spec_from_file_location("ccvalue", os.path.join(HERE, "cc-value.py"))
-_ccv = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(_ccv)
-load = _ccv.load
+from .i18n import t
+from . import paths
+from .cc_value import load
 
 B, D, R, Y, X = "\033[1m", "\033[2m", "\033[31m", "\033[33m", "\033[0m"
 
-DEFAULT_LOG = os.path.join(ROOT, "data", "ratelimit-log.jsonl")
+DEFAULT_LOG = paths.ratelimit_log()
 PROJECTS = os.path.expanduser("~/.claude/projects")
 
 # 로그에 있는 그대로의 토큰 종류. CSV 와 --steps 표는 이걸 쓴다.
@@ -711,14 +702,17 @@ def main():
                 "%s한도 게이지 표본이 없다: %s%s") % (R, log_path, X))
         print(t("\nClaude Code prints the limit burn on screen and throws it away. A collector",
                 "\n클로드코드는 한도 소진율을 화면에 찍고 버린다. 상태바에 수집기를 걸어야"))
-        print(t("has to sit on your status line. %s./install.sh%s prints the settings.json snippet.\n",
-                "쌓인다. %s./install.sh%s 가 settings.json 에 넣을 조각을 찍어 준다.\n") % (B, X))
+        print(t("has to sit on your status line. Put this in %s~/.claude/settings.json%s:\n"
+                '    "statusLine": {"type": "command", "command": "claudeusage statusline --print"}\n',
+                "쌓인다. %s~/.claude/settings.json%s 에 이걸 넣는다.\n"
+                '    "statusLine": {"type": "command", "command": "claudeusage statusline --print"}\n')
+              % (B, X))
         print(t("%sWhat works before samples pile up:%s",
                 "%s표본이 쌓이기 전에도 되는 것:%s") % (D, X))
-        print(t("%s  python3 tools/cc-value.py --all    surviving lines · waste%s",
-                "%s  python3 tools/cc-value.py --all    살아남은 줄·낭비%s") % (D, X))
-        print(t("%s  python3 tools/cc-usage.py          limit now + per product%s",
-                "%s  python3 tools/cc-usage.py          지금 한도 + 제품별 분해%s") % (D, X))
+        print(t("%s  claudeusage value --all    surviving lines · waste%s",
+                "%s  claudeusage value --all    살아남은 줄·낭비%s") % (D, X))
+        print(t("%s  claudeusage usage          limit now + per product%s",
+                "%s  claudeusage usage          지금 한도 + 제품별 분해%s") % (D, X))
         return 1
 
     rows, skip, n_raw = load_samples(log_path, field)
@@ -731,7 +725,7 @@ def main():
     attribute(steps, reqs)
 
     if "--csv" in sys.argv:
-        write_csv(steps, opt("--csv", os.path.join(ROOT, "data", "limit-steps.csv")))
+        write_csv(steps, opt("--csv", paths.data_file("limit-steps.csv")))
         return 0
 
     print(t("%s%d sample rows, %d used · %d windows · %d change points%s",
