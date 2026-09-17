@@ -1,0 +1,15 @@
+# 도커 빌드 문맥에는 .gitignore 가 안 먹는다. 여기 따로 적어야 한다.
+# 이걸 빠뜨리면 `COPY . /app` 이 사용 기록(경로·프로젝트 이름이 들어 있다)과
+# 내부 조사 자료를 이미지에 통째로 구워 넣는다.
+data/
+docs/
+dist/
+build/
+*.egg-info/
+.git/
+.gitignore
+__pycache__/
+*.pyc
+*.jsonl
+.playwright-mcp/
+.DS_Store

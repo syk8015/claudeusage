@@ -21,3 +21,6 @@ __pycache__/
 dist/
 build/
 *.egg-info/
+
+# 브라우저 자동화 찌꺼기. 비밀은 없지만 올릴 이유도 없다(작업 흔적이 남는다).
+.playwright-mcp/

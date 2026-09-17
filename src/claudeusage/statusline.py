@@ -28,6 +28,21 @@ from .i18n import t
 from . import paths
 
 LOG = paths.ratelimit_log()
+
+# 기록에 남길 칸. **금지 목록이 아니라 허용 목록이다**(W4 의 교훈).
+#
+# 클로드코드가 상태바에 넘겨주는 JSON 에는 transcript_path·cwd·workspace·
+# scratchpad_dir·session_name·prompt_id 가 같이 온다. 거기엔 사용자 이름과 **다른
+# 프로젝트 이름**이 그대로 박혀 있다(`/Users/<이름>/.claude/projects/-Users-<이름>-...`).
+# 한도 분석에는 하나도 안 쓰인다 — 쓰는 건 아래뿐이다. 그래서 담지 않는다.
+# 처음엔 받은 걸 통째로 저장했다가 보안 점검에서 잡혔다(2026-09-17).
+#
+# session_id 는 남긴다. 창 안에서 같은 세션의 비용 증가분을 이어 붙이는 데 필요하고
+# (cost_by_window), 오래된 스냅샷을 세션별로 걸러내는 데도 쓴다. 이 파일은 로컬에만
+# 있고 .gitignore 로 막혀 있다.
+KEEP = ("session_id", "agent_type", "agent", "model", "version", "effort",
+        "output_style", "cost", "context_window", "rate_limits",
+        "prompt_cache", "fast_mode", "thinking", "exceeds_200k_tokens")
 STATE = os.path.expanduser("~/.claude")
 
 
@@ -56,7 +71,7 @@ def sample(data, raw):
         pass
 
     import time
-    row = dict(data)
+    row = {k: data[k] for k in KEEP if k in data}
     row["logged_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     os.makedirs(os.path.dirname(LOG), exist_ok=True)
     with open(LOG, "a", encoding="utf-8") as f:

@@ -1,9 +1,0 @@
-[    1731ms] [WARNING] [GSI_LOGGER]: Your client application uses one of the Google One Tap prompt UI status methods that may stop functioning when FedCM becomes mandatory. Refer to the migration guide to update your code accordingly and opt-in to FedCM to test your changes. Learn more: https://developers.google.com/identity/gsi/web/guides/fedcm-migration?s=dc#display_moment and https://developers.google.com/identity/gsi/web/guides/fedcm-migration?s=dc#skipped_moment @ https://accounts.google.com/gsi/client:86
-[    1734ms] [ERROR] Not signed in with the identity provider. @ https://mcp.so/submit?type=server:0
-[   15755ms] [ERROR] [GSI_LOGGER]: FedCM get() rejects with NetworkError: Error retrieving a token. @ https://accounts.google.com/gsi/client:87
-[   16757ms] [ERROR] Not signed in with the identity provider. @ https://mcp.so/submit?type=server:0
-[   21753ms] [ERROR] Access to fetch at 'https://accounts.google.com/gsi/client' from origin 'https://mcp.so' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource. @ https://mcp.so/submit?type=server:0
-[   21753ms] [ERROR] Failed to load resource: net::ERR_FAILED @ https://accounts.google.com/gsi/client:0
-[   24937ms] [ERROR] [GSI_LOGGER]: FedCM get() rejects with NetworkError: Error retrieving a token. @ https://accounts.google.com/gsi/client:87
-[   29631ms] [ERROR] Access to fetch at 'https://accounts.google.com/gsi/client' from origin 'https://mcp.so' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource. @ https://mcp.so/submit?type=server:0
-[   29631ms] [ERROR] Failed to load resource: net::ERR_FAILED @ https://accounts.google.com/gsi/client:0

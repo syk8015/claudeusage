@@ -315,7 +315,10 @@ def shape(o, path="", depth=0):
             print("  %s: %s = %s" % (path, t, o))
         else:
             s = str(o)
-            print("  %s: %s = %r%s" % (path, t, s[:60], " …" if len(s) > 60 else ""))
+            # 문자열 값은 안 찍는다. --shape 는 "구조만" 보는 용도인데 값을 찍으면
+            # 계정·조직 식별자가 화면에 나올 수 있다. 시각처럼 모양만 알면 되는 건
+            # 길이로 충분하다(보안 점검에서 잡힌 것, 2026-09-17).
+            print("  %s: %s (%d자)" % (path, t, len(s)))
 
 
 def append_log(data):
