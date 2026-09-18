@@ -34,16 +34,18 @@ Git-based tools track code with `git blame`, so anything you never committed is 
 Requires Python 3.9+ (standard library only, no dependencies) and macOS for the live-limit tool.
 
 ```bash
-pip install claudeusage        # or: uv tool install claudeusage
-claude mcp add --scope user --transport stdio claudeusage -- claudeusage-mcp
+git clone https://github.com/syk8015/claudeusage && cd claudeusage
+./install.sh                   # package + skill + MCP server (user scope)
 claude mcp list                # claudeusage … ✔ Connected
 ```
 
-That gives you the `claudeusage` command and the `claudeusage-mcp` server. To also install the Claude Code skill — which teaches Claude which tool to reach for and how to phrase the numbers — clone the repo and run `./install.sh`; it installs the package in editable mode, drops the skill in `~/.claude/skills/`, and registers the server. `./install.sh --uninstall` reverses it.
+`install.sh` installs the package (trying `uv`, `pipx`, `pip`, then a dedicated venv — modern Pythons block system installs), drops the Claude Code skill in `~/.claude/skills/`, and registers the MCP server. `./install.sh --uninstall` reverses it.
+
+That gives you the `claudeusage` command and the `claudeusage-mcp` server. A PyPI release (`pip install claudeusage`) is built and tested but not published yet.
 
 ### One more step for the limit tools
 
-Claude Code shows your limit gauge and throws it away — nothing stores it. `cc-limit.py` and `cc-chat.py` need that history, so a collector has to sit on your status line. Add this to `~/.claude/settings.json`:
+Claude Code shows your limit gauge and throws it away — nothing stores it. `claudeusage limit` and `claudeusage chat` need that history, so a collector has to sit on your status line. Add this to `~/.claude/settings.json`:
 
 ```json
 "statusLine": {
@@ -95,25 +97,25 @@ Three sources, each blind in a different way, so they are merged:
 
 | Source | Gives | Blind when |
 | --- | --- | --- |
-| Status line samples (`tools/statusline-sample.py`) | Gauge readings with reset times | Claude Code isn't running |
+| Status line samples (`claudeusage statusline`) | Gauge readings with reset times | Claude Code isn't running |
 | Claude desktop app history | Gauge readings every 15 min | The app isn't running |
 | OAuth usage endpoint | **Per-product truth** (Claude Code / chat / Cowork) | Only the current weekly window |
 
-The estimate is a subtraction: `chat = gauge rise − what local logs explain`. The "explained" part uses per-model weights fitted by `cc-limit.py`, fitted only on windows with no suspected off-log usage — otherwise chat usage inflates the weights and the estimator goes blind to itself.
+The estimate is a subtraction: `chat = gauge rise − what local logs explain`. The "explained" part uses per-model weights fitted by `claudeusage limit`, fitted only on windows with no suspected off-log usage — otherwise chat usage inflates the weights and the estimator goes blind to itself.
 
 Two things had to be corrected, both found by running it on real data:
 
 1. **Half-observed windows tilt the subtraction.** If the gauge is only watched for part of a window, the rise reads low while the attributed cost reads high. Only windows with a known reset time, watched from zero, are counted (55 of 107 here).
 2. **Log-derived cost runs 6–9% low** — background calls never reach the logs. Left alone, that gap becomes fake chat usage. Each window is scaled against the status line's own total.
 
-`python3 tools/check-chat.py` verifies 15 invariants, including an anchor: a real window where chat was confirmed by hand.
+`claudeusage check` verifies 15 invariants, including an anchor: a real window where chat was confirmed by hand.
 
 ## Accuracy, honestly
 
 - The per-product breakdown is ground truth, but only one weekly window of it has been collected so far. Calling the estimator "validated" needs more.
 - Model weights come from 5–7 clean windows for the less-used models. Direction is solid; the exact multiplier still moves.
 - Limit gauges are integers. One change point is coarse; answers are averages over ~1,200 of them.
-- `cc-usage.py` reads Claude Code's credentials from the macOS keychain, sends them only to `api.anthropic.com`, and never prints or stores them. What it records is an allowlist: timestamp, limit kind, model name, percentage, reset time, product shares.
+- `claudeusage usage` reads Claude Code's credentials from the macOS keychain, sends them only to `api.anthropic.com`, and never prints or stores them. What it records is an allowlist: timestamp, limit kind, model name, percentage, reset time, product shares.
 
 ## What's not here yet
 
@@ -125,7 +127,7 @@ Listed on the official MCP registry as **`io.github.syk8015/claudeusage`**.
 
 <!-- mcp-name: io.github.syk8015/claudeusage -->
 
-Also on [Glama](https://glama.ai/mcp/servers/syk8015/claudeusage) and PyPI (`pip install claudeusage`).
+Also listed on [Glama](https://glama.ai/mcp/servers/syk8015/claudeusage).
 
 ## License
 
