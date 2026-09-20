@@ -11,6 +11,7 @@ MCP 서버만 따로 `claudeusage-mcp` 로도 부를 수 있게 둔다(설정 �
     claudeusage chat
     claudeusage usage --log
     claudeusage statusline --print      (상태바에 거는 것)
+    claudeusage prune                   (오래된 표본 줄이기. --apply 전엔 미리보기만)
     claudeusage mcp                     (MCP 서버)
     claudeusage check                   (정합성 검사 둘 다)
 """
@@ -26,6 +27,8 @@ SUB = {
     "chat":  ("cc_chat",  t("how much of the limit chat ate", "채팅이 먹은 한도")),
     "usage": ("cc_usage", t("limits right now, per product", "지금 한도 + 제품별 분해")),
     "statusline": ("statusline", t("status line collector", "상태바 표본 수집기")),
+    "prune": ("prune", t("shrink old samples (preview unless --apply)",
+                         "오래된 표본 줄이기 (--apply 전엔 미리보기만)")),
     "mcp":   ("mcp_server", t("run the MCP server (stdio)", "MCP 서버 실행 (stdio)")),
 }
 
