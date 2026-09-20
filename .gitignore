@@ -11,6 +11,7 @@ docs/선행조사-리포트.md
 
 __pycache__/
 *.pyc
+.pytest_cache/
 .DS_Store
 
 # 서버 등록은 ./install.sh 가 사용자 수준으로 한다. 프로젝트 .mcp.json 을 같이 두면

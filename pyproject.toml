@@ -23,6 +23,11 @@ classifiers = [
 # 의존성 없음. 표준 라이브러리만 쓴다 — 이게 이 도구의 설계 원칙이다.
 dependencies = []
 
+[project.optional-dependencies]
+# 개발용(테스트)이다. 실행에는 필요 없다 — 위의 "의존성 없음"은 그대로다.
+#   pip install -e '.[dev]' && python -m pytest
+dev = ["pytest>=7"]
+
 [project.urls]
 Homepage = "https://github.com/syk8015/claudeusage"
 Repository = "https://github.com/syk8015/claudeusage"
@@ -31,6 +36,10 @@ Issues = "https://github.com/syk8015/claudeusage/issues"
 [project.scripts]
 claudeusage = "claudeusage.cli:main"
 claudeusage-mcp = "claudeusage.mcp_server:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]                       # 설치하지 않고 저장소에서 바로 돌린다
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/claudeusage"]
