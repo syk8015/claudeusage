@@ -30,9 +30,9 @@ Claude 구독이 본전을 하는지 **로컬 기록만으로** 재는 도구. �
 4. **Claude Code 플러그인 디렉터리** (앤트로픽 운영, 우리 구조가 이미 플러그인 모양)
 5. **타사 채팅**(ChatGPT·Gemini export) — 한도가 아니라 구독료 얘기라 지표부터 새로
 6. 기록 파일 정리 — `data/ratelimit-log.jsonl` 이 하루 1~5MB 씩 는다(2026-09-21 48MB).
-   **도구는 만들었다**: `claudeusage prune` (브랜치 `night/prune-tool`, 검증은 `docs/prune-검증.md`).
+   **도구는 만들어 `main` 에 병합했다**: `claudeusage prune` (검증은 `docs/prune-검증.md`).
    줄은 그대로 두고 `--fit` 이 안 읽는 칸만 걷어내서 84% 준다(출력은 글자 하나 안 달라짐).
-   **진짜 파일에는 아직 안 돌렸다.** 병합 뒤 `claudeusage prune` 으로 미리보기 → `--apply`.
+   **진짜 파일에는 아직 안 돌렸다.** 다음: `claudeusage prune` 으로 미리보기 → `--apply`.
    상태바 수집기(`~/.claude/statusline-command.sh`)가 아직 줄 전체(경로·프로젝트 이름 포함)를
    저장한다(규칙 4). 허용 목록으로 바꿔야 새로 쌓이는 양도 준다.
 
@@ -71,14 +71,15 @@ Claude 구독이 본전을 하는지 **로컬 기록만으로** 재는 도구. �
 
 ```
 src/claudeusage/     cc_value · cc_limit · cc_chat · cc_usage · mcp_server
-                     statusline · cli · paths · i18n · check_limit · check_chat
+                     statusline · prune · cli · paths · i18n · check_limit · check_chat
+tests/               pytest (python -m pytest). prune 검사 23개
 skills/claudeusage/  스킬 원본 (__REPO__ 는 install.sh 가 치환)
 data/                표본. 깃에 안 올라간다
 README.ko.md         작업 노트 38KB — 배경·실측·틀렸던 과정 전부
 README.md            영문 대문 (공개용, 비율만)
 ```
 
-명령: `claudeusage value|limit|chat|usage|statusline|mcp|check`
+명령: `claudeusage value|limit|chat|usage|statusline|prune|mcp|check`
 
 ## 지금 쓰는 계정 상태 (참고)
 
