@@ -9,6 +9,10 @@ data/*.jsonl
 # 공개하면 그 오류까지 우리 주장으로 읽힌다.
 docs/선행조사-리포트.md
 
+# 밤작업 보고서. 계정 실제 수치(토큰·비용·한도 %)가 들어 있다. 공개 쪽은 비율만.
+docs/prune-검증.md
+docs/DIRECTION-2026-09.md
+
 __pycache__/
 *.pyc
 .pytest_cache/
