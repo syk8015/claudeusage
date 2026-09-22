@@ -131,9 +131,9 @@ DISPATCH = {
         "summary": [], "waste": ["--waste"], "mix": ["--mix"], "files": ["--files"]}),
     "limit_breakdown": ("cc_limit", {
         "windows": [], "fit": ["--fit"], "steps": ["--steps"], "weekly": ["--weekly"]}),
-    "chat_share": ("cc-chat.py", {
+    "chat_share": ("cc_chat", {
         "weeks": [], "windows": ["--windows"], "sources": ["--sources"]}),
-    "current_limits": ("cc-usage.py", {"": []}),
+    "current_limits": ("cc_usage", {"": []}),
 }
 
 
