@@ -247,7 +247,7 @@ Claude Code 92% · Chats 8% · Cowork 0% · Other 0%
 
 ### 아직 절반이다
 
-원래 "채팅 통합"은 **타사까지** 합치는 계획이었다(ChatGPT `conversations.json`, Gemini Takeout 을 받아 클라이언트에서 토큰 추정). 이번에 한 건 **Claude 계정 안의 채팅 몫**이다. 타사는 아직이고, 그쪽은 성격이 다르다 — 한도가 아니라 남의 구독료 얘기라 지표부터 다시 정해야 한다.
+원래 "채팅 통합"은 **타사까지** 합치는 계획이었다(ChatGPT `conversations.json`, Gemini Takeout 을 받아 클라이언트에서 토큰 추정). 이번에 한 건 **Claude 계정 안의 채팅 몫**이다. 타사는 **하지 않기로 했다(2026-10-03, 대상을 Claude 로 한정)** — 한도가 아니라 남의 구독료 얘기라 지표부터 달라진다.
 
 지금 것의 한계도 남아 있다.
 - 정답 표본이 1주치뿐이다. 추정 3% 대 정답 8%는 온전한 창 2개로 낸 값이라 아직 채점이라 부르기 어렵다. `cc-usage.py --log` 를 주마다 돌려 쌓아야 한다.
@@ -474,10 +474,8 @@ claudeusage usage --tail 20                        # 쌓인 기록 보기
 착수 순서는 위 "제품 방향"에 있다. 여기는 그 외 잔여 항목.
 
 - **정답 표본 쌓기** — `cc-usage.py --log` 를 주마다. 주간 창이 지나가면 그 주 정답은 영영 못 받는다. 표본이 쌓여야 `claudeusage chat` 추정을 제대로 채점한다
-- **타사 채팅** — ChatGPT `conversations.json`, Gemini Takeout. 한도가 아니라 구독료 얘기라 지표부터 다시 정해야 한다
 - **저절로 되는 것** — Fable 5.1 은 순수 창이 5개뿐이다. Fable을 쓰는 날이 쌓이면 `claudeusage limit --fit` 만 다시 돌리면 된다
 - **모델별 주간 한도 지켜보기** — `cc-usage.py --log` 를 가끔 돌려 `weekly_scoped(Fable)` 추이를 쌓는다. 9/15 에 33%. 한 줄로는 계산 방식을 모른다
-- **다른 CLI 확장** — Codex 로그 파서. 통합의 폭을 넓히는 쪽이라 채팅 통합 다음
 
 ## 지켜야 할 것
 

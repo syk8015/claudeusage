@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "claudeusage"
-version = "1.0.0"
+version = "1.0.1"
 description = "Measures whether your Claude subscription is paying off, from local logs. No upload."
 readme = "README.md"
 requires-python = ">=3.9"

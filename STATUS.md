@@ -1,4 +1,4 @@
-# 지금 상태 (2026-09-18)
+# 지금 상태 (2026-10-03)
 
 **세션은 이 파일만 읽고 시작하면 된다.** README.ko.md 는 38KB 짜리 작업 노트라
 매번 읽으면 토큰만 나간다. 아래에 없는 배경이 필요할 때만 그쪽 해당 절을 편다.
@@ -9,6 +9,8 @@ Claude 구독이 본전을 하는지 **로컬 기록만으로** 재는 도구. �
 경쟁 도구는 전부 토큰·비용을 재는데, 우리만 **"짠 코드가 살아남았는지"** 를 잰다.
 소개 문구는 항상 그걸로 시작한다. 비용 얘기로 시작하면 열넷째 비용 추적기로 읽힌다.
 
+**대상은 Claude 하나로 한정한다 (2026-10-03 결정).** ChatGPT·Gemini 등 타사 채팅은 하지 않는다.
+
 ## 어디까지 했나
 
 - 엔진 4종(살아남은 줄·낭비·활동별 비용·유출 방지) 완료
@@ -16,25 +18,23 @@ Claude 구독이 본전을 하는지 **로컬 기록만으로** 재는 도구. �
 - MCP 서버 + 클로드코드 스킬 포장 완료
 - **공개**: https://github.com/syk8015/claudeusage (MIT)
 - **공식 MCP 레지스트리 등록**: `io.github.syk8015/claudeusage`
-- **glama.ai 등재** (점수 B) · **mcp.so 제출**(검토 대기) · **punkpeye PR** 열림
+- **glama.ai 등재** (점수 B) · **punkpeye 목록 병합됨**(09-16) · **mcp.so 제출**(검토 대기)
 - 출력 영어 기본(`CLAUDEUSAGE_LANG=ko` 로 한국어)
 - 파이썬 패키지 구조로 정리(`src/claudeusage/`), 보안 점검 및 수정 완료
+- prune 으로 표본 파일 정리 완료(09-22, 48→37MB). 상태바 수집기는 허용 목록으로 바뀜
+- **1.0.1** (10-03): Opus 5.5 단가(비용이 1.58배로 부풀어 있었다), 채팅 추정기의 이중 보정 제거
 
-## 다음 할 일 (순서대로)
+## 다음 할 일 — 알리기에 집중 (순서대로)
 
-1. **PyPI 배포** — 빌드·검사까지 끝났다(`dist/` 에 1.0.0). 남은 건 PyPI 계정과
-   토큰(`~/.pypirc`)뿐. 토큰은 **채팅에 붙여넣지 말 것**, 파일로 받는다.
-2. **awesome-claude-code 등록 — 2026-09-30 부터**. 저장소가 14일 넘어야 하고
-   그 사이 커밋이 이어져야 한다. 그 전에 내면 자동으로 닫힌다. PR 아니라 이슈 양식.
+1. **awesome-claude-code 등록** — 조건(첫 커밋 뒤 14일) 충족. 이슈 양식이고 체크 항목이
+   "직접 눈으로 봤다"는 서약이라 **사용자가 직접 낸다.** 분류는
+   `Observability & Monitoring > Usage & Cost`. 이모지·홍보 문구 금지
+2. **PyPI 배포** — 이름 `claudeusage` 비어 있음(10-03 확인). 1.0.1 로 다시 묶어야 한다
+   (1.0.0 묶음은 Opus 5.5 단가 수정 전). 남은 건 PyPI 계정과 토큰(`~/.pypirc`).
+   토큰은 **채팅에 붙여넣지 말 것**, 파일로 받는다
 3. **mcpservers.org 제출** (wong2 목록에 반영, 5분)
 4. **Claude Code 플러그인 디렉터리** (앤트로픽 운영, 우리 구조가 이미 플러그인 모양)
-5. **타사 채팅**(ChatGPT·Gemini export) — 한도가 아니라 구독료 얘기라 지표부터 새로
-6. 기록 파일 정리 — `data/ratelimit-log.jsonl` 이 하루 1~5MB 씩 는다(2026-09-21 48MB).
-   **도구는 만들어 `main` 에 병합했다**: `claudeusage prune` (검증은 `docs/prune-검증.md`).
-   줄은 그대로 두고 `--fit` 이 안 읽는 칸만 걷어내서 84% 준다(출력은 글자 하나 안 달라짐).
-   **진짜 파일에는 아직 안 돌렸다.** 다음: `claudeusage prune` 으로 미리보기 → `--apply`.
-   상태바 수집기(`~/.claude/statusline-command.sh`)가 아직 줄 전체(경로·프로젝트 이름 포함)를
-   저장한다(규칙 4). 허용 목록으로 바꿔야 새로 쌓이는 양도 준다.
+5. 표본이 `data/` 와 `~/.claudeusage/` 로 갈라져 있다 — 합치는 스크립트는 시험 끝, 실행은 사용자 몫
 
 ## 손이 필요 없는 것
 
@@ -74,7 +74,7 @@ src/claudeusage/     cc_value · cc_limit · cc_chat · cc_usage · mcp_server
                      statusline · prune · cli · paths · i18n · check_limit · check_chat
 tests/               pytest (python -m pytest). prune 검사 23개
 skills/claudeusage/  스킬 원본 (__REPO__ 는 install.sh 가 치환)
-data/                표본. 깃에 안 올라간다
+data/                옛 표본(09-22 까지). 깃에 안 올라간다. 새 표본은 ~/.claudeusage/
 README.ko.md         작업 노트 38KB — 배경·실측·틀렸던 과정 전부
 README.md            영문 대문 (공개용, 비율만)
 ```

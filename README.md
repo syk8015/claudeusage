@@ -117,9 +117,9 @@ Two things had to be corrected, both found by running it on real data:
 - Limit gauges are integers. One change point is coarse; answers are averages over ~1,200 of them.
 - `claudeusage usage` reads Claude Code's credentials from the macOS keychain, sends them only to `api.anthropic.com`, and never prints or stores them. What it records is an allowlist: timestamp, limit kind, model name, percentage, reset time, product shares.
 
-## What's not here yet
+## Scope
 
-Other vendors. Merging ChatGPT and Gemini exports was the original plan for "combine coding and chat"; this covers the Claude account only. That part is about subscription money rather than rate limits, so it needs its own metrics.
+Claude only. Merging ChatGPT and Gemini exports was the original plan for "combine coding and chat"; it was dropped on purpose. Everything here is built around one Claude account and its rate limits.
 
 ## Registry
 
