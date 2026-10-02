@@ -29,7 +29,7 @@ def main():
     rows, info = C.merged_samples()
     wins = C.windows_of(rows)
     wb, fit = C.weights()
-    C.measure(wins, wb, C.bar_cost_by_window())
+    C.measure(wins, wb)
 
     # ── 1. 소스 병합. 데스크톱은 더하기만 해야 한다.
     print("\n\033[1m소스 병합\033[0m")
@@ -56,10 +56,10 @@ def main():
     print("\n\033[1m추정값\033[0m")
     ck("채팅 몫은 음수가 없다", all(w["chat"] >= 0 for w in wins))
     ck("채팅 몫이 상승분을 못 넘는다", all(w["chat"] <= w["rise"] + 1e-9 for w in wins))
-    over = [w for w in clean if w["gross"] > 1.0]
-    ck("로그 누락 보정은 1.0~1.5 배 안에 있다",
-       all(1.0 <= w["gross"] <= 1.5 for w in wins), "보정된 창 %d개" % len(over))
     tot_rise = sum(w["rise"] for w in clean)
+    resid = sum(w["resid"] for w in clean)
+    ck("자르기 전 잔차 합이 상승분의 -5% 를 밑돌지 않는다 (밑돌면 설명분을 넘치게 센 것)",
+       resid >= -0.05 * tot_rise, "%+.0f%%p / %.0f%%p" % (resid, tot_rise))
     tot_chat = sum(w["chat"] for w in clean)
     ck("전체 채팅 비중이 0~50% 안에 있다 (넘으면 가중치나 구간이 틀어진 것)",
        0 <= tot_chat <= 0.5 * tot_rise,

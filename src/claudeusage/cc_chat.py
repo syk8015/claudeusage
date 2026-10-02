@@ -242,18 +242,7 @@ def predict(cost_by_model, w):
     return sum(c * w.get(m, fallback) for m, c in cost_by_model.items())
 
 
-def bar_cost_by_window():
-    """상태바가 세는 창별 비용. 로그 합계보다 완전하다.
-
-    로그로 더한 비용은 상태바 누계보다 약 6~9% 적다(README.ko.md 함정 7 — 로그에 안 남는
-    백그라운드 호출). 그대로 두면 '설명되는 몫'이 그만큼 낮게 나오고, 차액이 전부
-    채팅으로 넘어간다. 창마다 비율을 재서 되돌린다.
-    """
-    rows, _, _ = L.load_samples(L.DEFAULT_LOG, "five_hour")
-    return L.cost_by_window(rows, WIN)
-
-
-def measure(wins, weights_by_model, bar_cost=None):
+def measure(wins, weights_by_model):
     reqs = L.request_index(min(w["tf"] for w in wins) - 1, max(w["t_top"] for w in wins))
     times = [r["t"] for r in reqs]
     import bisect
@@ -265,13 +254,11 @@ def measure(wins, weights_by_model, bar_cost=None):
         w["reqs"] = len(chunk)
         w["cost"] = sum(r["cost"] for r in chunk)
         w["cost_by_model"] = dict(cm)
-        # 로그 누락 보정. 상태바가 더 많이 봤으면 그 비율만큼 올린다. 모델 구성은
-        # 로그 것을 그대로 쓴다(상태바는 모델을 안 쪼개 준다). 1.5배는 안전장치다.
-        w["gross"] = 1.0
-        bc = (bar_cost or {}).get(w["reset"], 0.0)
-        if w["cost"] > 1.0 and bc > w["cost"]:
-            w["gross"] = min(1.5, bc / w["cost"])
-        w["pred"] = predict(cm, weights_by_model) * w["gross"]
+        # 로그에 안 남는 호출(README.ko.md 함정 7)을 따로 보정하지 않는다. 가중치를 같은
+        # 로그 $ 로 게이지 상승에 적합하므로 그 몫은 이미 가중치에 들어 있다. 예전엔
+        # 상태바/로그 비율을 한 번 더 곱했는데, 2026-10-03 Opus 5.5 단가를 바로잡자 이게
+        # 창 23개에서 켜져 채팅 몫이 8% → 0%, 편향 -145%p 가 됐다(끄면 7%, 정답 8~9%).
+        w["pred"] = predict(cm, weights_by_model)
         w["resid"] = w["rise"] - w["pred"]
         # 관측이 온전한 창만 뺄셈이 뜻을 가진다. 아니면 상승분은 낮게, 설명분은 높게
         # 나와 뺄셈이 통째로 기운다. 8월(되짚은 창)이 전부 여기 걸린다.
@@ -441,7 +428,7 @@ def main():
         return 1
     wins = windows_of(rows)
     wb, fit = weights()
-    measure(wins, wb, bar_cost_by_window())
+    measure(wins, wb)
 
     print(t("%s%d samples · %d windows · weights fitted on %d windows (R² %.3f, %.0f%% error)%s",
             "%s표본 %d개 · 창 %d개 · 가중치는 창 %d개로 적합 (R² %.3f, 오차 %.0f%%)%s")
