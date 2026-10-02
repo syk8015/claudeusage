@@ -22,6 +22,7 @@ Claude 구독이 본전을 하는지 **로컬 기록만으로** 재는 도구. �
 - 출력 영어 기본(`CLAUDEUSAGE_LANG=ko` 로 한국어)
 - 파이썬 패키지 구조로 정리(`src/claudeusage/`), 보안 점검 및 수정 완료
 - prune 으로 표본 파일 정리 완료(09-22, 48→37MB). 상태바 수집기는 허용 목록으로 바뀜
+- 표본을 `~/.claudeusage/` 하나로 합침(10-03). 저장소 `data/` 는 이제 없다
 - **1.0.1** (10-03): Opus 5.5 단가(비용이 1.58배로 부풀어 있었다), 채팅 추정기의 이중 보정 제거
 
 ## 다음 할 일 — 알리기에 집중 (순서대로)
@@ -34,7 +35,6 @@ Claude 구독이 본전을 하는지 **로컬 기록만으로** 재는 도구. �
    토큰은 **채팅에 붙여넣지 말 것**, 파일로 받는다
 3. **mcpservers.org 제출** (wong2 목록에 반영, 5분)
 4. **Claude Code 플러그인 디렉터리** (앤트로픽 운영, 우리 구조가 이미 플러그인 모양)
-5. 표본이 `data/` 와 `~/.claudeusage/` 로 갈라져 있다 — 합치는 스크립트는 시험 끝, 실행은 사용자 몫
 
 ## 손이 필요 없는 것
 
@@ -74,7 +74,7 @@ src/claudeusage/     cc_value · cc_limit · cc_chat · cc_usage · mcp_server
                      statusline · prune · cli · paths · i18n · check_limit · check_chat
 tests/               pytest (python -m pytest). prune 검사 23개
 skills/claudeusage/  스킬 원본 (__REPO__ 는 install.sh 가 치환)
-data/                옛 표본(09-22 까지). 깃에 안 올라간다. 새 표본은 ~/.claudeusage/
+~/.claudeusage/      표본·정답 파일 (저장소 밖)
 README.ko.md         작업 노트 38KB — 배경·실측·틀렸던 과정 전부
 README.md            영문 대문 (공개용, 비율만)
 ```
