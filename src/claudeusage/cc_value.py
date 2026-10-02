@@ -35,22 +35,34 @@ from .i18n import t         # 화면에 나가는 말만 영/한. 주석·키는
 # 비용이 정확히 2배가 된다. 100% 단일 모델 세션에서 상태바 누계와 대조해 역산한 값:
 #     claude-fable-5-1  →  $5.04 / $25.21     claude-opus-5  →  $5.04 / $25.20
 #     claude-fable-5    →  $10.02 / $50.10
+# opus-5-5 가 표에 없을 때는 opus-5 에 걸려 $5/$25·캐시읽기 0.1배로 셌다. 공식가는
+# $4/$20·캐시읽기 $0.20(0.05배)이고, 단일 모델 세션 73개에서 상태바 누계와 대조하면
+# 옛 식은 실제의 1.58배, 새 식은 1.05배(중앙값, 남는 몫은 서브에이전트)다 (2026-10-03).
 RATES = [
     ("fable-5-1", 5, 25), ("mythos-5-1", 5, 25),
     ("fable-5", 10, 50), ("mythos", 10, 50),
-    ("opus-5", 5, 25), ("opus-4-8", 5, 25), ("opus-4-7", 5, 25), ("opus-4-6", 5, 25),
-    ("sonnet-5", 2, 10), ("sonnet-4-6", 3, 15), ("haiku", 1, 5),
+    ("opus-5-5", 4, 20), ("opus-5", 5, 25),
+    ("opus-4-8", 5, 25), ("opus-4-7", 5, 25), ("opus-4-6", 5, 25),
+    ("sonnet-5-5", 2, 10), ("sonnet-5", 2, 10), ("sonnet-4-6", 3, 15), ("haiku", 1, 5),
 ]
 FAST = (10, 50)          # fast 모드(Opus 5/4.8) 프리미엄 요율
+FAST_RATES = {"opus-5-5": (8, 40)}     # 빠른 모드도 모델마다 다르다. 없으면 FAST
+CACHE_READ = {"opus-5-5": 0.05}        # 캐시읽기 = 입력가 × 이 값. 없으면 0.1
 DEFAULT = (5, 25)
 
 def rate_for(model, speed):
+    key = canon_model(model)
     if speed == "fast":
-        return FAST
-    for key, i, o in RATES:
-        if key in (model or ""):
+        return FAST_RATES.get(key, FAST)
+    for k, i, o in RATES:
+        if k == key:
             return i, o
     return DEFAULT
+
+
+def cache_read_rate(model, speed):
+    """캐시읽기 100만 토큰당 단가."""
+    return rate_for(model, speed)[0] * CACHE_READ.get(canon_model(model), 0.1)
 
 
 def load(path):
@@ -81,7 +93,7 @@ def session_entries(main_path):
 
 def cost_of(entries):
     """한 응답이 content block 수만큼 여러 줄로 기록되므로 message.id 로 중복 제거."""
-    seen, micro = set(), 0.0
+    seen, total = set(), 0.0
     for e in entries:
         if e.get("type") != "assistant":
             continue
@@ -90,16 +102,8 @@ def cost_of(entries):
         if not u or mid in seen:
             continue
         seen.add(mid)
-        pin, pout = rate_for(msg.get("model"), u.get("speed"))
-        cc = u.get("cache_creation") or {}
-        micro += (
-            u.get("input_tokens", 0) * pin
-            + u.get("output_tokens", 0) * pout
-            + u.get("cache_read_input_tokens", 0) * pin * 0.1
-            + cc.get("ephemeral_1h_input_tokens", 0) * pin * 2      # 1시간 TTL = 입력가 2배
-            + cc.get("ephemeral_5m_input_tokens", 0) * pin * 1.25   # 5분 TTL = 1.25배
-        )
-    return micro / 1_000_000, len(seen)
+        total += usage_cost(msg)
+    return total, len(seen)
 
 
 # ────────────────────────────────────────────── 편집 복원
@@ -235,9 +239,10 @@ def usage_cost(msg):
     cc = u.get("cache_creation") or {}
     return (u.get("input_tokens", 0) * pin
             + u.get("output_tokens", 0) * pout
-            + u.get("cache_read_input_tokens", 0) * pin * 0.1
-            + cc.get("ephemeral_1h_input_tokens", 0) * pin * 2
-            + cc.get("ephemeral_5m_input_tokens", 0) * pin * 1.25) / 1_000_000
+            + u.get("cache_read_input_tokens", 0) * cache_read_rate(msg.get("model"), u.get("speed"))
+            + cc.get("ephemeral_1h_input_tokens", 0) * pin * 2      # 1시간 TTL = 입력가 2배
+            + cc.get("ephemeral_5m_input_tokens", 0) * pin * 1.25   # 5분 TTL = 1.25배
+            ) / 1_000_000
 
 
 def cost_index(entries):
@@ -331,13 +336,13 @@ def waste_report(entries):
         if not u or mid in seen:
             continue
         seen.add(mid)
-        pin, _ = rate_for(msg.get("model"), u.get("speed"))
-        per_req.append((u.get("cache_read_input_tokens", 0), pin))
+        per_req.append((u.get("cache_read_input_tokens", 0),
+                        cache_read_rate(msg.get("model"), u.get("speed"))))
     bloat = 0.0
     if per_req:
         vals = sorted(r for r, _ in per_req)
         med = vals[len(vals) // 2]
-        bloat = sum(max(0, r - med) * pin * 0.1 for r, pin in per_req) / 1_000_000
+        bloat = sum(max(0, r - med) * cr for r, cr in per_req) / 1_000_000
 
     return {
         "total": total,

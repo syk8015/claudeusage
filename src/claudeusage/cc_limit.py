@@ -24,7 +24,7 @@ from collections import defaultdict
 
 from .i18n import t
 from . import paths
-from .cc_value import load
+from .cc_value import load, RATES, usage_cost
 
 B, D, R, Y, X = "\033[1m", "\033[2m", "\033[31m", "\033[33m", "\033[0m"
 
@@ -50,24 +50,8 @@ GROUP_LABEL = {"출력": t("output", "출력"),
 def gl(name):
     return GROUP_LABEL.get(name, name)
 
-# ── 모델별 100만 토큰당 단가 (입력, 출력). 반드시 긴 이름부터.
-#
-# cc-value.py 의 RATES 는 ("fable-5", 10, 50) 이 앞에 있어 claude-fable-5-1 이
-# 거기 먼저 걸린다. 실측으로 확인한 결과 이건 틀렸다. 100% 단일 모델 세션에서
-# 상태바의 누계와 대조해 단가를 역산하면:
-#     claude-fable-5-1  →  입력 $5.04 / 출력 $25.21   (= $5/$25)
-#     claude-opus-5     →  입력 $5.04 / 출력 $25.20   (= $5/$25)
-#     claude-fable-5    →  입력 $10.02 / 출력 $50.10  (= $10/$50)
-# 즉 Fable 5.1 은 Fable 5 의 절반이고 Opus 5 와 같다. 이 표를 안 고치면
-# Fable 5.1 세션 비용이 정확히 2배로 부풀고, 모델별 한도 배율이 통째로 틀린다.
-RATES = [
-    ("fable-5-1", 5, 25), ("mythos-5-1", 5, 25),
-    ("fable-5", 10, 50), ("mythos", 10, 50),
-    ("opus-5", 5, 25), ("opus-4-8", 5, 25), ("opus-4-7", 5, 25), ("opus-4-6", 5, 25),
-    ("sonnet-5", 2, 10), ("sonnet-4-6", 3, 15), ("haiku", 1, 5),
-]
-FAST = (10, 50)          # fast 모드 프리미엄 (Opus 5/4.8)
-DEFAULT = (5, 25)
+# ── 모델별 단가는 cc_value 의 표 하나만 쓴다. 예전엔 여기 따로 두었는데 cc_value 쪽이
+# fable-5-1 을 fable-5 로 셌기 때문이었다. 지금은 둘이 같아서 한 곳만 고치면 된다.
 MODEL_KEYS = [k for k, _, _ in RATES]
 
 # ── 로그 밖 소비. 한도는 계정 전체에 걸리는데 로컬 기록은 클로드코드 것뿐이다.
@@ -91,25 +75,6 @@ def model_key(model):
         if k in m:
             return k
     return "other"
-
-
-def usage_cost(msg):
-    """요청 하나의 API 환산가. cc-value.py 와 같은 식이되 단가표만 바로잡았다."""
-    u = msg.get("usage") or {}
-    if u.get("speed") == "fast":
-        pin, pout = FAST
-    else:
-        pin, pout = DEFAULT
-        for key, i, o in RATES:
-            if key in (msg.get("model") or ""):
-                pin, pout = i, o
-                break
-    cc = u.get("cache_creation") or {}
-    return (u.get("input_tokens", 0) * pin
-            + u.get("output_tokens", 0) * pout
-            + u.get("cache_read_input_tokens", 0) * pin * 0.1
-            + cc.get("ephemeral_1h_input_tokens", 0) * pin * 2
-            + cc.get("ephemeral_5m_input_tokens", 0) * pin * 1.25) / 1_000_000
 
 
 def to_epoch(s):

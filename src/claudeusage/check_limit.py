@@ -93,6 +93,20 @@ def main():
     ck("opus-5[1m] 은 $25/M 출력이고 opus-5 로 묶인다",
        L.usage_cost(dict(one, model="claude-opus-5[1m]")) == 25.0
        and L.model_key("claude-opus-5[1m]") == "opus-5")
+    ck("opus-5-5 는 $20/M 출력이고 opus-5 와 따로 묶인다",
+       L.usage_cost(dict(one, model="claude-opus-5-5")) == 20.0
+       and L.model_key("claude-opus-5-5[1m]") == "opus-5-5")
+    cr = {"usage": {"cache_read_input_tokens": 1_000_000}}
+    ck("캐시읽기는 opus-5-5 $0.20/M (0.05배), opus-5 $0.50/M (0.1배)",
+       abs(L.usage_cost(dict(cr, model="claude-opus-5-5")) - 0.20) < 1e-9
+       and abs(L.usage_cost(dict(cr, model="claude-opus-5")) - 0.50) < 1e-9)
+    fast = {"usage": {"output_tokens": 1_000_000, "speed": "fast"}}
+    ck("빠른 모드는 opus-5-5 $40/M, opus-5 $50/M 출력",
+       L.usage_cost(dict(fast, model="claude-opus-5-5")) == 40.0
+       and L.usage_cost(dict(fast, model="claude-opus-5")) == 50.0)
+    ck("sonnet-5-5 는 $10/M 출력이고 따로 묶인다",
+       L.usage_cost(dict(one, model="claude-sonnet-5-5")) == 10.0
+       and L.model_key("claude-sonnet-5-5") == "sonnet-5-5")
 
     print("\n\033[1m%s\033[0m" % ("전부 통과" if not FAIL else "실패 %d건: %s" % (len(FAIL), ", ".join(FAIL))))
     return 1 if FAIL else 0
